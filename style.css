@@ -601,7 +601,7 @@ textarea { resize: vertical; }
 .book-close { top: 12px; right: 16px; }
 
 /* The book is ALWAYS laid out at the standard full-size sheet geometry
-   (794px-wide A4 pages, 24px ruled rows) so every text line sits exactly on
+   (794px-wide A4 pages, 21px ruled rows) so every text line sits exactly on
    a ruled line. On smaller screens the whole spread is fitted uniformly via
    `zoom` — a pure visual scale that keeps the internal layout pixel-perfect
    and in sync with the paginator's measurements and the printed booklet. */
@@ -611,7 +611,7 @@ textarea { resize: vertical; }
 /* A4 = 210mm x 297mm -> spread is two A4 pages side by side (scaled to fit).
    THE RULED GEOMETRY OF EVERY SHEET (screen book AND print booklet) lives in
    these variables — one single source of truth:
-     --row    : pitch of one ruled row (24px COMPACT on a full-size A4 sheet)
+     --row    : pitch of one ruled row (21px ULTRA-COMPACT on a full-size A4 sheet)
      --head-h : header band height      --foot-h : footer band height
      --pad-t/--pad-b : first/last usable row offset inside the text area
    The paper gradient starts AT the top of the text area, so every line sits
@@ -625,7 +625,7 @@ textarea { resize: vertical; }
      standard height and stays perfectly ON the ruled lines. */
   --a4w: 794px;
   --a4h: calc(var(--a4w) * 297 / 210);
-  --row: 24px;
+  --row: 21px;
   --head-h: 120px;
   /* COMPACT GEOMETRY: footer band is exactly as tall as its contents (the
      "H ❤ D" monogram ≈ 86px + padding). MUST equal FOOT_H in script.js —
@@ -845,14 +845,14 @@ textarea { resize: vertical; }
 }
 .page-content h4 {
   font-family: "Playfair Display", serif;
-  font-size: 1rem;
+  font-size: .92rem;
   color: #5b3d1e;
   margin: 0 0 2px;
 }
-.page-content .entry-date { font-size: .7rem; color: #9a8265; }
+.page-content .entry-date { font-size: .66rem; color: #9a8265; }
 .page-content .entry-body {
-  font-size: .8rem;
-  line-height: var(--row, 24px);   /* one body line = exactly one ruled row */
+  font-size: .74rem;
+  line-height: var(--row, 21px);   /* one body line = exactly one ruled row */
   white-space: pre-wrap;
   word-break: break-word;
   color: #3c2f1e;
@@ -863,9 +863,9 @@ textarea { resize: vertical; }
    included) renders with identical row-locked typography as intact bubbles. */
 .page-content .entry-body .eb-line {
   display: block;
-  font-size: .8rem;
-  line-height: var(--row, 24px);
-  min-height: var(--row, 24px);
+  font-size: .74rem;
+  line-height: var(--row, 21px);
+  min-height: var(--row, 21px);
   margin: 0;
   padding: 0;
 }
@@ -882,7 +882,7 @@ textarea { resize: vertical; }
   border-left: 3px solid rgba(179, 69, 107, .45);
   border-radius: 0;
   padding: 0 12px 0 10px;
-  margin: 0 0 var(--row, 24px);
+  margin: 0 0 var(--row, 21px);
   box-sizing: border-box;
   overflow: visible;
 }
@@ -890,10 +890,10 @@ textarea { resize: vertical; }
 .entry-bubble.eb-chota { border-left-color: #c2185b; }
 .entry-bubble .eb-head {
   font-family: "Playfair Display", serif;
-  font-size: .86rem;
+  font-size: .78rem;
   color: #5b3d1e;
   margin: 0;
-  line-height: var(--row, 24px);   /* head occupies exactly one ruled row */
+  line-height: var(--row, 21px);   /* head occupies exactly one ruled row */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -905,7 +905,7 @@ textarea { resize: vertical; }
    others. Display-only: never stored, never sent to Supabase. */
 .entry-bubble .eb-no {
   display: inline-block;
-  font-size: .72rem;
+  font-size: .66rem;
   line-height: 1;
   vertical-align: 2px;
   font-weight: 700;
@@ -922,14 +922,14 @@ html.print-mode .entry-bubble .eb-no { -webkit-print-color-adjust: exact; print-
 .entry-bubble.eb-chota .eb-head strong { color: #c2185b; }
 [data-theme="dark"] .entry-bubble.eb-deep .eb-head strong { color: #ffb37e; }
 [data-theme="dark"] .entry-bubble.eb-chota .eb-head strong { color: #ff9ec7; }
-.entry-bubble .eb-cont-note { font-size: .72rem; color: #9a8265; font-style: italic; }
+.entry-bubble .eb-cont-note { font-size: .66rem; color: #9a8265; font-style: italic; }
 /* 📂 Diary-heading band inside a bubble — the section this message belongs
    to (see DIARY_HEADINGS). One ruled row tall so pagination stays exact. */
 .entry-bubble .eb-heading-band {
   display: block;
-  font-size: .68rem;
-  line-height: var(--row, 24px);
-  height: var(--row, 24px);
+  font-size: .62rem;
+  line-height: var(--row, 21px);
+  height: var(--row, 21px);
   margin: 0 0 2px;
   font-weight: 700;
   letter-spacing: .02em;
@@ -943,9 +943,9 @@ html.print-mode .entry-bubble .eb-no { -webkit-print-color-adjust: exact; print-
   box-sizing: border-box;
 }
 [data-theme="dark"] .entry-bubble .eb-heading-band { color: #e8c9a8; background: rgba(219,112,147,.16); }
-html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height: 24px; height: 24px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html.print-mode .entry-bubble .eb-heading-band { font-size: .62rem; line-height: 21px; height: 21px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 /* Related parts that stay INSIDE the same bubble as their message */
-.entry-bubble .eb-extra { display: block; margin-top: 4px; }
+.entry-bubble .eb-extra { display: block; margin-top: 0; }
 .entry-bubble .eb-label { font-weight: 600; font-style: italic; color: #9a8265; }
 .page-num {
   font-size: .85rem;
@@ -1072,7 +1072,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
      spread is fitted to small screens uniformly with `zoom` instead. */
 }
 /* Narrow screens: NO responsive sheet resize any more. The sheets keep the
-   STANDARD 794px width / 24px ruled rows and the whole spread is fitted
+   STANDARD 794px width / 21px ruled rows and the whole spread is fitted
    uniformly with `zoom` (set by JS in script.js → --book-zoom), so every
    text line stays exactly one standard ruled row high — on screen, on the
    leaf animation and in the printed booklet alike. */
@@ -1196,7 +1196,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   to   { opacity: .95; transform: rotate(var(--rot, 0deg)) scale(1); }
 }
 /* (Stickers need no small-screen override: the sheet keeps its STANDARD
-   24px ruled rows at every viewport width and is fitted uniformly with
+   21px ruled rows at every viewport width and is fitted uniformly with
    `zoom`, so sticker positions stay in sync automatically.) */
 
 /* ---- Cover page (OUR LOVE STORY) ---- */
@@ -1207,7 +1207,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
 .book-cover .cover-quote { font-size: .9rem; color: #b3456b; margin: 16px 20px; line-height: 1.6; }
 
 /* ---- COVER PAGE hero ("OUR LOVE STORY" title block, page 1 of the book) ----
-   Monospace so the ==== divider rows land exactly on the sheet's 24px ruled
+   Monospace so the ==== divider rows land exactly on the sheet's 21px ruled
    lines and never collide with the stickers placed beside/below the block. */
 .page-content .book-cover {
   font-family: "Courier New", ui-monospace, monospace;
@@ -1220,14 +1220,14 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   font-size: .72rem;
   color: #b3456b;
   letter-spacing: 1px;
-  line-height: 24px;                      /* one ruled row — no drift */
+  line-height: 21px;                      /* one ruled row — no drift */
   margin: 0 8px;
   white-space: nowrap;
 }
 .book-cover .cover-divider {
   color: #d8a7b8;
   font-size: .6rem;
-  line-height: 24px;                      /* snaps to the ruled lines */
+  line-height: 21px;                      /* snaps to the ruled lines */
   letter-spacing: 0;
   margin: 0 8px;
   overflow: hidden;
@@ -1237,7 +1237,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   font-family: "Courier New", ui-monospace, monospace;
   font-size: .66rem;
   color: #7a5a30;
-  line-height: 24px;
+  line-height: 21px;
   margin: 0 8px;
   word-break: break-word;
 }
@@ -1245,7 +1245,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   font-family: "Courier New", ui-monospace, monospace;
   font-size: .63rem;
   color: #9a8265;
-  line-height: 24px;
+  line-height: 21px;
   margin: 0 8px;
   word-break: break-word;
 }
@@ -1254,12 +1254,12 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   font-style: italic;
   font-size: .65rem;
   color: #b3456b;
-  line-height: 24px;
+  line-height: 21px;
   margin: 0 8px;
   word-break: break-word;
 }
 /* (No small-screen override here any more: the sheets keep the STANDARD
-   24px ruled rows at every viewport width — the spread is fitted with a
+   21px ruled rows at every viewport width — the spread is fitted with a
    uniform `zoom`, so these row-aligned cover lines never need resizing.) */
 
 /* ---- Header: Google Drive link (left corner, next to the logo) ---- */
@@ -1283,7 +1283,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
      sheet-fitting maths below stays exact.
    • ONE A4 SHEET at a time (never the two-page spread), fitted to the screen
      with a uniform `zoom` (--book-zoom from fitBookZoom()) so the standard
-     geometry (794px wide, 24px rows) and the printed booklet stay untouched.
+     geometry (794px wide, 21px rows) and the printed booklet stay untouched.
    • Pages turn ONLY by swiping left/right on the sheet (a plain tap does
      nothing; even the Prev/Next tabs are hidden — swipe-only navigation).
    ==========================================================================*/
@@ -1389,7 +1389,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   border-left: 5px solid #b3456b;
   border-radius: 14px;
   padding: 10px 14px 9px;
-  margin: 0 0 var(--row, 24px);
+  margin: 0 0 var(--row, 21px);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -1399,7 +1399,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   margin: 0 0 4px; line-height: 1.3;
 }
 .cover-bubble .cb-meta { font-size: .8rem; color: #9a8265; margin: 0 0 6px; line-height: 1.5; }
-.cover-bubble .entry-body { font-size: .8rem; line-height: var(--row, 24px); white-space: pre-wrap; word-break: break-word; color: #3c2f1e; margin: 0; }
+.cover-bubble .entry-body { font-size: .74rem; line-height: var(--row, 21px); white-space: pre-wrap; word-break: break-word; color: #3c2f1e; margin: 0; }
 .cover-bubble.cb-hero { text-align: center; border-left-width: 1px; }
 .cover-bubble.cb-hero .cb-title { font-size: 1.35rem; color: #b3456b; }
 
@@ -1408,7 +1408,7 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
    (html.print-mode / body.print-mode, set by script.js). The on-screen app is
    NEVER affected. These rules override the responsive @media blocks above so
    a printed sheet ALWAYS uses the full-size geometry the paginator measured:
-   24px rows, 120px header band, 88px footer band, 60px reserved bottom band.
+   21px rows, 120px header band, 88px footer band, 60px reserved bottom band.
    ==========================================================================*/
 @media print {
   /* browsers drop backgrounds by default — keep the paper + ruled lines */
@@ -1436,16 +1436,16 @@ html.print-mode .page-num { font-size: .85rem; }
    area in the flex column; baking a 60px pad into .page-inner made every
    printed page flow short of its true last row (double-counted margin). */
 html.print-mode .page-inner { padding: 30px 26px 0 !important; }
-html.print-mode .page-content .entry-body { font-size: .8rem; line-height: 24px; }
-html.print-mode .page-content .entry-body .eb-line { display: block; font-size: .8rem; line-height: 24px; min-height: 24px; margin: 0; padding: 0; }
-html.print-mode .entry-bubble { padding: 0 12px 0 10px; margin: 0 0 24px; }
-html.print-mode .entry-bubble .eb-head { font-size: .86rem; line-height: 24px; }
-html.print-mode .cover-bubble { margin-bottom: 24px; }
-html.print-mode .cover-bubble .entry-body { line-height: 24px; }
+html.print-mode .page-content .entry-body { font-size: .74rem; line-height: 21px; }
+html.print-mode .page-content .entry-body .eb-line { display: block; font-size: .74rem; line-height: 21px; min-height: 21px; margin: 0; padding: 0; }
+html.print-mode .entry-bubble { padding: 0 12px 0 10px; margin: 0 0 21px; }
+html.print-mode .entry-bubble .eb-head { font-size: .78rem; line-height: 21px; }
+html.print-mode .cover-bubble { margin-bottom: 21px; }
+html.print-mode .cover-bubble .entry-body { line-height: 21px; }
 html.print-mode .book-cover .cover-title-row,
 html.print-mode .book-cover .cover-divider,
 html.print-mode .book-cover .cover-names,
 html.print-mode .book-cover .cover-started,
-html.print-mode .book-cover .cover-quote { line-height: 24px; }
+html.print-mode .book-cover .cover-quote { line-height: 21px; }
 html.print-mode .page-content .book-cover { padding-top: clamp(30px, 16%, 170px); }
 html.print-mode .page-flow { min-height: 100%; }
