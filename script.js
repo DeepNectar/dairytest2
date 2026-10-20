@@ -1267,7 +1267,7 @@
 
   // Hidden measuring host: an EXACT, ISOLATED clone of the real book sheet —
   // header band + .page-inner + .page-content with the same classes and the
-  // same fixed geometry as a full A4 print sheet (30px ruled rows, 120px
+  // same fixed geometry as a full A4 print sheet (24px ruled rows, 120px
   // header, 104px footer, 30px top offset). Because the clone lives under
   // <body>, every selector that scopes rules to the book ("#leftContent …",
   // ".modal-overlay …", "@media" width overrides) is neutralised on it by
@@ -1288,7 +1288,7 @@
   const PRINT_A4_W_PX = Math.round(8.267 * 96);   // 210mm @ 96 css px/in ≈ 794px
 
   // ---- COMPACT PAGE GEOMETRY (one single source of truth) ----
-  // --row stays 30px: it is the pagination currency for EVERY line (body,
+  // --row is 24px (COMPACT): it is the pagination currency for EVERY line (body,
   // heads, heading bands), so entries stay perfectly aligned everywhere even
   // though the visible ruled lines are gone (compact style). The header band
   // is now only tall enough to hold the Soulmate Code photo (108px + margins)
@@ -1300,7 +1300,13 @@
      style.css (.book --foot-h), the measuring host (MEASURE_CSS), the print
      window (PRINT_WIN_CSS) and html.print-mode ALL read this same number,
      so preview, pagination maths and PDF never drift apart again. */
-  const HEAD_H = 120, FOOT_H = 88;   // footer band = exactly one stamp-free monogram row
+  const HEAD_H = 120, FOOT_H = 88;
+  /* 📐 COMPACT TYPEGRAPHY: one ruled row = 24px (was 30px). ONE single
+     source of truth — MUST equal --row in style.css (.book), MEASURE_CSS
+     and the print window below. Shrinking the row pitch together with the
+     entry font sizes lets every page hold MORE entries while all three
+     render targets (preview, paginator, PDF) stay perfectly in sync. */
+  const ROW_H = 24;
 
   // 📂 ONE shared heading-band style — the SINGLE source of truth for how a
   // diary heading looks in the booklet. The same string is injected into:
@@ -1308,12 +1314,12 @@
   //   • the print window (PRINT_WIN_CSS)   → the PDF booklet,
   //   • the live app document at startup   → the on-screen preview book,
   // so EVERY heading band is pixel-identical in preview and PDF. One ruled
-  // row tall (30px), SHRUNK text (.74rem) that always FITS inside the band:
+  // row tall (--row = 24px), SHRUNK text (.66rem) that always FITS inside the band:
   // long headings condense automatically via font-stretch instead of being
   // cut off mid-word. __SCOPE__ is replaced with each target's selector.
   const HEADING_BAND_CSS = [
     '__SCOPE__{display:block!important;font-family:"Playfair Display",serif;' +
-      'font-size:.74rem!important;font-stretch:82%;line-height:var(--row)!important;' +
+      'font-size:.66rem!important;font-stretch:82%;line-height:var(--row)!important;' +
       'height:var(--row)!important;margin:0 0 2px!important;padding:0 8px!important;' +
       'font-weight:700!important;letter-spacing:.02em!important;color:#7a5b34!important;' +
       'background:rgba(219,112,147,.10)!important;border-left:3px solid #b3456b!important;' +
@@ -1336,11 +1342,11 @@
   // Normaliser stylesheet injected INSIDE the measuring host. Every rule is
   // scoped to the host subtree and !important, so it beats any app or media
   // query rule and pins the host to the standard full-size book geometry:
-  // --row 30px lines, fixed bands, single-source typography. This is what
+  // --row 24px lines, fixed bands, single-source typography. This is what
   // keeps the measured lines IDENTICAL to the ruled lines of the sheets.
   const MEASURE_CSS = [
     '#measureHost{position:fixed;left:-99999px;top:0;visibility:hidden;background:#fff}',
-    '#measureHost .book{--a4w:' + PRINT_A4_W_PX + 'px;--row:30px;--head-h:' + HEAD_H + 'px;--foot-h:' + FOOT_H + 'px;' +
+    '#measureHost .book{--a4w:' + PRINT_A4_W_PX + 'px;--row:' + ROW_H + 'px;--head-h:' + HEAD_H + 'px;--foot-h:' + FOOT_H + 'px;' +
       '--pad-t:30px;--pad-b:60px;width:auto!important;height:auto!important;position:static!important;' +
       'transform:none!important;background:none!important;box-shadow:none!important;border-radius:0!important}',
     '#measureHost .print-sheet{width:' + PRINT_A4_W_PX + 'px!important;height:' +
@@ -1367,21 +1373,21 @@
       'overflow:visible!important;display:flex!important;text-align:left!important}',
     '#measureHost .page-content{position:relative!important;display:flex!important;flex:1!important;' +
       'min-height:100%!important;align-self:stretch!important;padding:0!important}',
-    /* STANDARD-SIZE typography — ONE body/head line = exactly one 30px ruled row */
-    '#measureHost .entry-body{font-size:.92rem!important;line-height:var(--row)!important;' +
+    /* STANDARD-SIZE typography — ONE body/head line = exactly one 24px ruled row */
+    '#measureHost .entry-body{font-size:.8rem!important;line-height:var(--row)!important;' +
       'white-space:pre-wrap!important;word-break:break-word!important;color:#3c2f1e!important;margin:0!important}',
     /* one SOURCE line per <div class="eb-line">: identical typography and a
        hard row-lock, so a split piece and an intact bubble occupy EXACTLY the
        same rows — the first entry of a page can never drift from its siblings */
-    '#measureHost .entry-body .eb-line{display:block!important;font-size:.92rem!important;' +
+    '#measureHost .entry-body .eb-line{display:block!important;font-size:.8rem!important;' +
       'line-height:var(--row)!important;min-height:var(--row)!important;margin:0!important;padding:0!important}',
-    '#measureHost h4{font-size:1.15rem!important;line-height:var(--row)!important;margin:0 0 2px!important}',
-    '#measureHost .entry-date{font-size:.78rem!important}',
+    '#measureHost h4{font-size:1rem!important;line-height:var(--row)!important;margin:0 0 2px!important}',
+    '#measureHost .entry-date{font-size:.7rem!important}',
     '#measureHost .entry-bubble{background:transparent!important;border:none!important;' +
       'border-left:3px solid rgba(179,69,107,.45)!important;border-radius:0!important;' +
       'padding:0 12px 0 10px!important;margin:0 0 var(--row)!important;box-sizing:border-box!important;' +
       'overflow:visible!important}',
-    '#measureHost .entry-bubble .eb-head{font-size:1rem!important;line-height:var(--row)!important;margin:0!important;' +
+    '#measureHost .entry-bubble .eb-head{font-size:.86rem!important;line-height:var(--row)!important;margin:0!important;' +
       'white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}',
     '#measureHost .entry-bubble .eb-cont-note{font-size:.72rem!important;line-height:var(--row)!important}',
     '#measureHost .entry-bubble .eb-extra{display:block!important;margin-top:0!important;line-height:var(--row)!important}',
@@ -1688,7 +1694,7 @@
   // Now the host is a fully INERT clone: an about:blank iframe whose head
   // contains ONLY the standard MEASURE_CSS below plus the same web fonts the
   // app uses — no app stylesheet, no media queries, nothing can ever override
-  // the standard 794px A4 geometry and 30px ruled rows again. Screen,
+  // the standard 794px A4 geometry and 24px ruled rows again. Screen,
   // pagination maths and the printed booklet therefore share ONE identical
   // layout.
   let measureIframe = null;
@@ -1881,7 +1887,7 @@
   // hidden template page so it matches the book exactly.
   function bodyLineHeight() {
     const mp = getMeasurePage();
-    if (!mp) return 31;
+    if (!mp) return ROW_H + 1;
     // Measure ONE line of ordinary text — a single line-box height. (The old
     // probe used "x\nx" inside a <p>, but the browser's white-space handling
     // collapsed that into one giant box and returned nonsense, which broke
@@ -1893,7 +1899,7 @@
     mp.appendChild(p);
     let lh = p.getBoundingClientRect().height;
     mp.innerHTML = "";
-    if (!lh || lh < 8 || lh > 90) lh = 31;
+    if (!lh || lh < 8 || lh > 90) lh = ROW_H + 1;
     return lh;
   }
 
@@ -1932,11 +1938,11 @@
     // the PDF) got cut off.
     await ensureMeasureFonts(mp.ownerDocument || document);
     // The host is an EXACT clone of one standard A4 sheet (getMeasurePage +
-    // MEASURE_CSS): 794px-wide sheet, 30px ruled rows, 120px header band,
+    // MEASURE_CSS): 794px-wide sheet, 24px ruled rows, 120px header band,
     // 104px footer band, 30px top offset, 60px reserved bottom band. Nothing
     // is read off the scaled-down preview any more — measured lines are the
     // STANDARD lines, identical on screen and in the printed booklet.
-    const bodyLH = Math.max(10, bodyLineHeight());   // == --row (30px standard)
+    const bodyLH = Math.max(10, bodyLineHeight());   // == --row (24px compact)
     const box = contentBox(mp);                      // content area of the sheet
     // .page-inner / .page-content carry NO padding in the standard geometry
     // (the 30px top offset lives on .page-inner's own padding-top, which is
@@ -2703,7 +2709,7 @@
   //      of any message flows onto the NEXT page — nothing is ever cut off;
   //   3. the print window receives the pages EXACTLY as the preview flowed
   //      them — same markup/classes, same invisible right-hand sticker slots,
-  //      and the app's own full-size geometry (30px ruled rows, 120px header,
+  //      and the app's own full-size geometry (24px ruled rows, 120px header,
   //      104px footer) embedded inline so rows/lines ALWAYS keep the standard
   //      size in the PDF;
   //   4. stickers are then baked INSIDE the print window itself, once its
@@ -2719,18 +2725,18 @@
   //   sheet 794 x 1123px, header band 120px, footer band 104px,
   //   .page-inner padding 30px top / 26px sides / 0 bottom,
   //   reserved bottom band 60px (pad-b), last 5 ruled rows stay empty.
-  // Text area inside .page-inner = 1123 − 120 − 104 − 30 = 869px;
-  // usable flow height = 869 − 5×30 = 719px (the "price margin" the
+  // Text area inside .page-inner = 1123 − 120 − 88 − 30 = 885px;
+  // usable flow height = 885 − 5×24 = 765px (the "price margin" the
   // paginator pays at the foot of every PDF page).
   const PRINT_SHEET_H_PX = Math.round(PRINT_A4_W_PX * 297 / 210);   // ≈1123px
   /* COMPACT geometry: bands come from the shared HEAD_H/FOOT_H constants —
      same numbers as the .book vars in style.css and MEASURE_CSS, so preview,
      paginator and PDF all pay the identical price at top and foot. */
   const PRINT_HEAD_H = HEAD_H, PRINT_FOOT_H = FOOT_H, PRINT_PAD_T = 30, PRINT_PAD_B = 60;
-  const PRINT_ROW = 30, PRINT_LAST_EMPTY_ROWS = 5;
+  const PRINT_ROW = ROW_H, PRINT_LAST_EMPTY_ROWS = 5;
   const PRINT_HOST_PAD_X = 52;                                      // 26+26
-  const PRINT_INNER_H_PX = PRINT_SHEET_H_PX - PRINT_HEAD_H - PRINT_FOOT_H - PRINT_PAD_T; // 869
-  const PRINT_USABLE_H_PX = PRINT_INNER_H_PX - PRINT_ROW * PRINT_LAST_EMPTY_ROWS;        // 719
+  const PRINT_INNER_H_PX = PRINT_SHEET_H_PX - PRINT_HEAD_H - PRINT_FOOT_H - PRINT_PAD_T; // 885
+  const PRINT_USABLE_H_PX = PRINT_INNER_H_PX - PRINT_ROW * PRINT_LAST_EMPTY_ROWS;        // 765
 
   // Print-window CSS: EXACTLY the app's own print rules (style.css
   // "html.print-mode …" block + .print-sheet geometry), copied here so the
@@ -2738,13 +2744,13 @@
   // linked stylesheet cannot be fetched inside the print window (file:// or
   // blocked pop-up contexts). Without these rules the browser falls back to
   // default styles and everything grows huge: ~16px rows instead of the
-  // standard 30px ruled rows, an unsized header/footer, unclamped logo/stamp
+  // standard 24px ruled rows, an unsized header/footer, unclamped logo/stamp
   // images at natural size — which is why text was cut off and stickers
   // landed on top of the entries.
   const PRINT_WIN_CSS = [
     'html,body{background:#fff;margin:0;padding:0}',
     /* ONE single source of truth for sheet geometry — identical values to the
-       app (.book / .print-page vars) AND to the measuring host: 30px ruled
+       app (.book / .print-page vars) AND to the measuring host: 24px ruled
        rows, 120px header band, 104px footer band, 30px top offset. The bottom
        margin (--pad-b = 60px reserved band + the 5 empty last rows) is NOT
        baked into .page-inner's padding anywhere — the paginator subtracts it
@@ -2818,22 +2824,22 @@
     '.page-content{position:relative;display:flex;flex:1;min-height:100%;align-self:stretch}',
     '.page-flow{position:relative;flex:1;min-height:100%;align-self:stretch}',
     '.sticker-slot{position:absolute;visibility:hidden;pointer-events:none}',
-    /* STANDARD-SIZE typography — one body line = exactly one 30px ruled row,
+    /* STANDARD-SIZE typography — one body line = exactly one 24px ruled row,
        one head line = exactly one row, one bubble gap = exactly one row */
-    '.page-content .entry-body{font-size:.92rem;line-height:var(--row);white-space:pre-wrap;' +
+    '.page-content .entry-body{font-size:.8rem;line-height:var(--row);white-space:pre-wrap;' +
       'word-break:break-word;color:#3c2f1e;margin:0}',
     /* one SOURCE line per <div class="eb-line"> — identical row-locked
        typography in the PDF, so split pieces render exactly like intact
        entries (the first entry of every page included) */
-    '.page-content .entry-body .eb-line{display:block;font-size:.92rem;line-height:var(--row);' +
+    '.page-content .entry-body .eb-line{display:block;font-size:.8rem;line-height:var(--row);' +
       'min-height:var(--row);margin:0;padding:0}',
-    '.page-content h4{font-family:"Playfair Display",serif;font-size:1.15rem;color:#5b3d1e;margin:0 0 2px;line-height:var(--row)}',
-    '.page-content .entry-date{font-size:.78rem;color:#9a8265}',
+    '.page-content h4{font-family:"Playfair Display",serif;font-size:1rem;color:#5b3d1e;margin:0 0 2px;line-height:var(--row)}',
+    '.page-content .entry-date{font-size:.7rem;color:#9a8265}',
     '.entry-bubble{background:transparent;border:none;border-left:3px solid rgba(179,69,107,.45);' +
       'border-radius:0;padding:0 12px 0 10px;margin:0 0 var(--row);box-sizing:border-box;overflow:visible}',
     '.entry-bubble.eb-deep{border-left-color:#b3541f}',
     '.entry-bubble.eb-chota{border-left-color:#c2185b}',
-    '.entry-bubble .eb-head{font-family:"Playfair Display",serif;font-size:1rem;color:#5b3d1e;' +
+    '.entry-bubble .eb-head{font-family:"Playfair Display",serif;font-size:.86rem;color:#5b3d1e;' +
       'margin:0;line-height:var(--row);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.entry-bubble .eb-head strong{font-weight:700}',
     '.entry-bubble.eb-deep .eb-head strong{color:#b3541f}',
@@ -2874,7 +2880,7 @@
   // all rows that may hold text — the last FIVE ruled rows stay empty, the
   // same rule the paginator flowed the pages with. Any text rect extending
   // BELOW this edge means content overflowed the sheet.
-  const PRINT_TEXT_BOTTOM_PX = PRINT_HEAD_H + PRINT_USABLE_H_PX;   // 120 + 719 = 839px
+  const PRINT_TEXT_BOTTOM_PX = PRINT_HEAD_H + PRINT_USABLE_H_PX;   // 120 + 765 = 885px
 
   function printBooklet() {
     // 1) FRESH DATA FROM STORAGE — rebuild the book pages exactly like the
