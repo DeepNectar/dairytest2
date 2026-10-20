@@ -118,7 +118,16 @@
         const key = String(r.id);
         if (seenIds.has(key)) return;
         seenIds.add(key);
-        uniq.push({ id: Number(r.id), title: r.title, body: normaliseStoredBody(r.body, r.sender), mood: r.mood, sender: r.sender, heading: r.heading || "", date: r.date, words: r.words });
+        const cleanBody = normaliseStoredBody(r.body, r.sender);
+        // RAW-HTML LEAK KILLER (storage side): the canonical body still wraps
+        // the message in plain quotes — e.g. `Name: "btw teh aa msg karyo…"` —
+        // and escapeHtml() turns those legitimate quote characters into
+        // &quot; entities, which made the FIRST imported entry of every page
+        // look like an HTML code dump (`&quot;btw …&quot;<span class="eb-
+        // extra">…`). Scrubbing here too removes every tag/entity AND the
+        // wrapping quotes before the text is ever handed to a renderer, so no
+        // entry on any page can show raw code anymore.
+        uniq.push({ id: Number(r.id), title: r.title, body: finalScrub(cleanBody), mood: r.mood, sender: r.sender, heading: r.heading || "", date: r.date, words: r.words });
       });
       // ENTRY NUMBER of the BOOKLET (1, 2, 3 … till the end): assigned here in
       // strict chronological order — the exact order the book flows pages — so
@@ -492,17 +501,21 @@
       // exactly like the booklet bubble; CSS folds anything still long into
       // a tidy preview with an ellipsis. The full text remains untouched.
       const previewBodyRaw = normaliseStoredBody(en.body, en.sender);
-      // The card shows the SAME formatted preview as the booklet bubble:
-      // baked-in legacy markup is folded to plain text (entities decoded to a
-      // fixpoint), so nothing like &quot; or <span …> ever appears as code.
-      let cleanPreview = String(previewBodyRaw || "")
-        .replace(/<div\b[^>]*eb-heading-band[^>]*>[\s\S]*?<\/div>/gi, "")
-        .replace(/<span\b[^>]*eb-extra[^>]*>\s*<span\b[^>]*eb-label[^>]*>([\s\S]*?)<\/span>/gi, "\n$1 ")
-        .replace(/<\/?(?:div|span|p|strong|em|i|b)\b[^>]*>/gi, "")
+      // THE CARD IS A FORMATTED PREVIEW — NEVER A CODE DUMP: the body runs
+      // through the very same renderer the booklet bubbles use
+      // (formatBookBodyHtml), so the first imported entry — and every legacy
+      // row whose body still carries baked-in markup (<div class='eb-heading-
+      // band'>…, &quot; entities, <span class="eb-extra">…</span>) — shows up
+      // as nicely LABELLED TEXT ("💭 How I felt: …"), not raw HTML source.
+      // Previously the sender prefix and the wrapping quotes were left inside
+      // the escaped card text, which made the whole entry look like code.
+      let cleanPreview = stripSenderPrefix(formatBookBodyHtml(previewBodyRaw, en.sender), en.sender);
+      // RAW-HTML LEAK KILLER (render side): finalScrub() flattens EVERY tag,
+      // entity and wrapping quote left by formatBookBodyHtml (its own markup
+      // labels are re-added below by the CSS-styled card, so the card text is
+      // pure content). Nothing escapeHtml() renders can look like code now.
+      cleanPreview = finalScrub(cleanPreview)
         .replace(/<br\s*\/?>/gi, "\n");
-      for (let g = 0; g < 4 && /&(?:quot|#0?39|apos|nbsp|lt|gt|amp);/.test(cleanPreview); g++) {
-        const b4 = cleanPreview; cleanPreview = decodeHtmlEntitiesLite(cleanPreview); if (cleanPreview === b4) break;
-      }
       const previewBody = trimEntryLines(cleanPreview).join("\n");
       article.innerHTML =
         "<header>" +
@@ -2361,7 +2374,9 @@
       const bodyOf = (n) => {
         let out = "";
         for (let i = 0; i < n && i < srcUnits.length; i++) {
-          out += "<div class='eb-line'>" + (srcUnits[i] ? escapeHtml(srcUnits[i]) : "&nbsp;") + "</div>";
+          // finalScrub: a split bubble's lines come straight from the htmlBody
+          // string — scrub every unit so no raw markup can show on any page.
+          out += "<div class='eb-line'>" + (srcUnits[i] ? escapeHtml(finalScrub(srcUnits[i])) : "&nbsp;") + "</div>";
         }
         return out;
       };
@@ -3722,7 +3737,17 @@
     //   1) one-line message:      "msg"            (rest may follow on later lines)
     //   2) multi-line message:    "line1\nline2"   (closing quote ends its own line)
     //   3) unterminated legacy:   "msg             (no closing quote at all)
+    // Legacy rows can still wear ENTITY quotes ("&quot;msg&quot;" or even the
+    // double-escaped "&amp;quot;") — decode those wrappers first so every
+    // shape below recognises them and no `&quot;` can leak as visible code.
+    for (let e = 0; e < 4; e++) {
+      const be = t;
+      t = t.replace(/^(&(?:amp|quot|#0?39);)+/i, '"')
+           .replace(/(&(?:amp|quot|#0?39);)+(?=\r?\n|$)/gi, '"');
+      if (t === be) break;
+    }
     let qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d][ \t]*(?=\r?\n|$)/);
+    if (!qm) qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d](?=\s*💭|\s*(?:How|What)\s+[Ii]\s+felt|$)/);
     if (qm) { t = qm[1] + t.slice(qm[0].length); }
     else {
       // Multi-line quoted message: opening quote on the first line, closing
@@ -3735,9 +3760,14 @@
         // strip the lone opening quote AND a lone trailing quote so neither
         // can ever leak into the preview as raw code.
         const un = t.match(/^[\s\uFEFF]*["\u201c]([\s\S]*)$/);
-        if (un) t = un[1].replace(/["\u201d][ \t]*$/, "");
+        if (un) t = un[1];
       }
     }
+    // Any lone wrapping quote that survived (e.g. a closing &quot;-quote glued
+    // to the 💭 label by a legacy save) must never show at the ends of the
+    // preview text — peel plain AND entity quotes from both ends.
+    t = t.replace(/^(?:\s|\uFEFF|["\u201c]|&(?:amp|quot|#0?39);)+/i, "")
+         .replace(/(?:["\u201d]|&(?:amp|quot|#0?39);)+\s*$/i, "");
     return t.replace(/^\r?\n/, "");
   }
 
@@ -3812,6 +3842,90 @@
       .replace(/&amp;/g, "&");
   }
 
+  // ---------- UNIVERSAL MARKUP SCRUBBER (raw-HTML leak killer) ----------
+  // Some OLD cloud rows carry their body fully HTML-ESCAPED (&lt;div class=
+  // 'eb-heading-band'&gt;…, &amp;quot;) or double-encoded. The targeted legacy
+  // regexes below only recognise PLAIN markup, so such rows slipped through
+  // and still showed raw HTML code on cards and booklet pages — not just the
+  // first entry, but any entry saved by those old paths. decodeAllEntities()
+  // understands every named/numeric entity, and stripAllMarkup() alternates
+  // "strip tags" with "decode entities" until the text is a FIXED POINT — so
+  // no matter how many times a body was escaped, only clean plain TEXT can
+  // ever reach a preview. Legitimate typed characters are never damaged:
+  // decoding only happens when it actually removes an ampersand sequence.
+  function decodeAllEntities(s) {
+    return String(s || "")
+      .replace(/&#x([0-9a-fA-F]+);/g, (_m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return _m; } })
+      .replace(/&#(\d+);/g, (_m, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return _m; } })
+      .replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&nbsp;/gi, " ")
+      .replace(/&ldquo;/gi, "\u201c").replace(/&rdquo;/gi, "\u201d")
+      .replace(/&lsquo;/gi, "\u2018").replace(/&rsquo;/gi, "\u2019")
+      .replace(/&mdash;/gi, "\u2014").replace(/&ndash;/gi, "\u2013")
+      .replace(/&hellip;/gi, "\u2026").replace(/&middot;/gi, "\u00b7")
+      .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
+  }
+  function stripAllMarkup(text) {
+    let t = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
+    for (let pass = 0; pass < 6; pass++) {
+      const before = t;
+      t = t
+        .replace(/<\s*(?:script|style)\b[^>]*>[\s\S]*?<\s*\/\s*(?:script|style)\s*>/gi, " ")
+        .replace(/<\s*br\s*\/?>\s*/gi, "\n")
+        .replace(/<\s*\/(?:div|p|li|ul|ol|blockquote|h[1-6])\s*>/gi, "\n")
+        .replace(/<[^>]*>/g, "");
+      // Decode entity sequences whenever decoding can ONLY remove characters
+      // (every named/numeric entity is longer than the character it stands
+      // for). A plain "&" typed by the user ("R&D", "me & you") is NOT an
+      // entity sequence and is never touched — legitimate text stays intact.
+      if (/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/.test(t)) {
+        t = decodeAllEntities(t);
+      }
+      if (t === before) break;                 // fixed point reached
+    }
+    return t;
+  }
+
+  // ---------- FINAL RENDER SCRUB (last line of defence) ----------
+  // escapeHtml() turns every "<" into "&lt;", so ANY markup that ever reaches
+  // a renderer is displayed as literal HTML CODE ("&lt;div class='eb-heading-
+  // band'&gt;…", "&quot;…&quot;", "<span class="eb-extra">…") — exactly the
+  // raw-code entries still visible on some pages. No targeted regex can keep
+  // up with every old save-path variant (plain markup, single-escaped,
+  // double-escaped), so EVERY render path now funnels its text through
+  // finalScrub(): strip tags → decode entities, alternating to a fixed point,
+  // then peel stray wrapping quotes. After this call the string provably
+  // contains NO tag and NO entity sequence — only plain text can be rendered.
+  const ENTITY_TRACE_RE = /&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/;
+  const TAG_TRACE_RE    = /<[a-zA-Z/!/][^>]*>?|</;
+  function finalScrub(text) {
+    let t = String(text == null ? "" : text);
+    for (let pass = 0; pass < 8; pass++) {
+      const before = t;
+      if (TAG_TRACE_RE.test(t) || ENTITY_TRACE_RE.test(t)) t = stripAllMarkup(t);
+      // A lone leftover ampersand-entity fragment (e.g. "&amp" cut mid-word)
+      // must never display as code either.
+      t = t.replace(/&(?:amp|quot|#0?39){1,5}(?![a-zA-Z0-9;])/g, "");
+      if (t === before) break;
+    }
+    // Wrapping quote pairs left by legacy saves made clean text look like a
+    // code dump ("btw teh aa msg karyo…" with stray quotes glued around it).
+    // Peel PLAIN and ENTITY quote forms (&quot;, &#39;, &amp;quot;…) from the
+    // very start/end of the whole text AND of every single line — a closing
+    // &quot;-quote glued to a 💭 label mid-text used to survive as visible
+    // raw code on the first imported entry of each page.
+    // Decode ANY leftover entity sequence first (&quot; → ", &amp; → &) so no
+    // entity can ever display as code, then peel only QUOTE CHARACTERS from
+    // the outer ends. Quotes inside the message ("Today you said \"I trust
+    // you\"") are legitimate content and are preserved.
+    for (let w = 0; w < 4; w++) {
+      const bw = t;
+      if (ENTITY_TRACE_RE.test(t)) t = decodeAllEntities(t);
+      t = t.replace(/^[\s\uFEFF]*["\u201c]+/, "").replace(/["\u201d]+[\s]*$/, "");
+      if (t === bw) break;
+    }
+    return t.trim();
+  }
+
   function normaliseStoredBody(body, sender) {
     // IDEMPOTENCY GUARD: loadEntriesFromCloud() already stores the CLEAN
     // canonical shape back into entriesCache. Every render path calls this
@@ -3823,7 +3937,7 @@
     // still carried quote characters) rendered as raw code like
     // `&quot;btw teh aa msg karyo…&quot;<span class="eb-extra">…`. If the
     // text is ALREADY in canonical shape (starts with  Sender: "…"  and has
-    // no legacy markup/entities), return it untouched.
+    // NO trace of markup or entities anywhere), return it untouched.
     const probe = String(body == null ? "" : body);
     // Canonical shape is:  Sender: "message"  optionally followed by
     //   What I felt: … / Note: … lines. The message itself may span MULTIPLE
@@ -3834,19 +3948,28 @@
     //   legacy pipeline where its legitimate quotes got rewritten into
     //   &quot; entities and re-escaped — the raw-code first entry).
     const canonicalRe = /^\s*(?:[^:\r\n"<]|[\uD800-\uDBFF][\uDC00-\uDFFF]){1,80}?\s*:\s*["\u201c][\s\S]*["\u201d]?\s*$(?:\r?\n(?:What I felt|Note):[\s\S]*)?$/i;
-    if (canonicalRe.test(probe) && !/<[a-z\/]/i.test(probe) && !/&(?:quot|#0?39|apos|nbsp|lt|gt|amp);/i.test(probe)) {
+    // The guard checks for ANY leftover tag fragment or ANY entity-looking
+    // sequence (not just the seven legacy ones) — fully HTML-ESCAPED old rows
+    // (&lt;div class=…&gt;, &amp;quot;) used to slip past the narrow check
+    // and stay permanently broken as raw code on every page.
+    if (canonicalRe.test(probe) && !/<[a-z\/]|<\s/i.test(probe) && !/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/.test(probe)) {
       return probe;
     }
-    let t = probe;
+    // UNIVERSAL SCRUB FIRST: flatten every tag and decode every entity (any
+    // encoding depth) BEFORE the targeted legacy handling below. This is what
+    // finally kills the remaining raw-HTML entries: rows saved fully escaped
+    // by an old path are recognised here instead of falling through the
+    // plain-markup-only regexes untouched.
+    let t = stripAllMarkup(probe);
     // 0) Detect the REAL sender from the leading "Name:" prefix when the
     //    caller's value does not match (legacy rows can store a different
     //    sender spelling than the column carries). The name may itself be
-    //    wrapped in quotes by old saves — &quot;🫰🫶🏻Chota Don❣️❤️😘&quot;:
-    //    &quot;msg&quot; — so quote characters are allowed inside the capture
-    //    and stripped afterwards. When the quoted-name form was NOT matched,
-    //    the sender stayed unset and step 6 re-emitted `Sender: "Sender:
-    //    \"msg\""` — the duplicated sender + leftover `&quot;` raw-code look of
-    //    the first imported entry on every page.
+    //    wrapped in quotes by old saves — "🫰🫶🏻Chota Don❣️❤️😘": "msg" —
+    //    so quote characters are allowed inside the capture and stripped
+    //    afterwards. When the quoted-name form was NOT matched, the sender
+    //    stayed unset and step 6 re-emitted `Sender: "Sender: \"msg\""` — the
+    //    duplicated sender + leftover raw-code look of the first imported
+    //    entry on every page.
     const pm = t.match(/^\s*["\u201c]?([^:\r\n""]{1,60}?)["\u201d]?\s*:\s/);
     if (pm && (!sender || pm[1].trim() !== String(sender).trim())) {
       const cand = pm[1].replace(/["\u201c\u201d]/g, "").trim();
@@ -3854,31 +3977,29 @@
         sender = cand;
       }
     }
-    // 1) Decode entity-wrapped legacy bodies (&quot;...&quot;, &#39; etc.).
-    //    DECODE-TO-FIXPOINT: legacy rows can be DOUBLE-encoded (&amp;quot;),
-    //    and one pass would leave `&quot;` behind which later got escaped to
-    //    raw code in the preview (the broken first entry). Keep decoding
-    //    until the text stops changing (max 4 passes), so whatever survived
-    //    ANY old save path is fully restored to plain characters here.
-    for (let guard = 0; guard < 4 && /&(?:quot|#0?39|apos|nbsp|lt|gt|amp);/.test(t); guard++) {
-      const before = t;
-      t = decodeHtmlEntitiesLite(t);
-      if (t === before) break;
-    }
-    // 2) Legacy heading band: <div class='eb-heading-band'>…</div> baked into
-    //    the body by old saves → remove the whole element (the heading lives
-    //    in its own column now and is re-emitted as a styled band).
+    // 1) Legacy heading band: <div class='eb-heading-band'>…</div> baked into
+    //    the body by old saves → remove the WHOLE element including its text
+    //    (the heading lives in its own column now and is re-emitted as a
+    //    styled band, so keeping the band's words inside the message would
+    //    duplicate them). stripAllMarkup above already turned any ESCAPED
+    //    variant into real tags, so this regex catches every encoding depth.
     t = t.replace(/\s*<div\b[^>]*eb-heading-band[^>]*>[\s\S]*?<\/div>\s*/gi, "\n");
-    // 3) Remaining markup: a legacy eb-extra span becomes its OWN line and
-    //    its inner label ("💭 How I felt: " / "📝 Note: ") is followed by a
-    //    newline, so the felt/note text always starts at a line beginning —
-    //    exactly where the canonical parser below expects its markers.
+    // 2) A legacy eb-extra span becomes its OWN line and its inner label
+    //    ("💭 How I felt: " / "📝 Note: ") is followed by a newline, so the
+    //    felt/note text always starts at a line beginning — exactly where the
+    //    canonical parser below expects its markers. The whole element is
+    //    consumed here (label + value together); leaving the closing </span>
+    //    for the generic flatten below used to glue the 💭 label onto the end
+    //    of the message line, where no parser could recognise it — the leak
+    //    that kept rendering entries as raw `…"💭 How I felt: …` code-dumps.
     t = t.replace(/<span\b[^>]*eb-extra[^>]*>\s*<span\b[^>]*eb-label[^>]*>([\s\S]*?)<\/span>/gi,
       function (_all, label) { return "\n" + label.trim() + " "; });
+    t = t.replace(/<span\b[^>]*eb-extra[^>]*>([\s\S]*?)<\/span>/gi, "\n$1 ");
     t = t.replace(/<\/?span\b[^>]*eb-extra[^>]*>/gi, "");
-    t = t.replace(/<\/?(?:div|span|p|strong|em|i|b)\b[^>]*>/gi, "");
-    t = t.replace(/<br\s*\/?>/gi, "\n");
-    // 4) Legacy 📂-marked line standing on its own → drop it (same reason as 2).
+    // 3) Any OTHER leftover element is flattened to its TEXT (tags gone,
+    //    words kept) — belt & braces after stripAllMarkup.
+    t = t.replace(/<[^>]*>/g, "");
+    // 4) Legacy 📂-marked line standing on its own → drop it (same reason as 1).
     t = t.replace(/^[ \t]*📂[^\r\n]*\r?\n/gm, "");
     // 5) Legacy inline felt label ("💭 How I felt: …" / "How I felt: …") →
     //    rename to the canonical "What I felt:" marker so the shared parser
@@ -3929,20 +4050,22 @@
     // leaks into the bubble as raw HTML code — the first imported entry looks
     // byte-identical to a hand-written one.
     let msg = stripSenderPrefix(normaliseStoredBody(rawBody, sender), sender);
-    // LAST LINE OF DEFENCE (the "first entry of every booklet page shows raw
-    // code" bug): whatever survived normalisation — leftover &quot; entities,
-    // an eb-extra span or a heading-band div baked into OLD cloud rows — is
-    // stripped here to PLAIN TEXT before parsing. The parser below re-adds
-    // its own properly-escaped markup, so a bubble can NEVER contain raw
-    // HTML code, on any page, for any entry.
+    // LAST LINE OF DEFENCE (the "entries show raw HTML code" bug): whatever
+    // survived normalisation — leftover &quot; entities, an eb-extra span, a
+    // heading-band div or ANY other markup baked into OLD cloud rows in any
+    // encoding depth — is flattened to PLAIN TEXT here by the universal
+    // scrubber before parsing. The parser below re-adds its own properly-
+    // escaped markup, so a bubble can NEVER contain raw HTML code, on any
+    // page, for any entry.
+    // An eb-extra span glued directly onto the message ("…yar 🥹💭 How I
+    // felt: …") must break onto its OWN line — that is exactly where the
+    // felt/note parser below finds its markers. Without this the label was
+    // treated as part of the message and rendered verbatim (raw-code look).
     msg = String(msg || "")
-      .replace(/<div\b[^>]*eb-heading-band[^>]*>[\s\S]*?<\/div>/gi, "")
-      .replace(/<span\b[^>]*eb-extra[^>]*>\s*<span\b[^>]*eb-label[^>]*>([\s\S]*?)<\/span>/gi, "\n$1 ")
-      .replace(/<\/?(?:div|span|p|strong|em|i|b)\b[^>]*>/gi, "")
-      .replace(/<br\s*\/?>/gi, "\n");
-    for (let g = 0; g < 4 && /&(?:quot|#0?39|apos|nbsp|lt|gt|amp);/.test(msg); g++) {
-      const b4 = msg; msg = decodeHtmlEntitiesLite(msg); if (msg === b4) break;
-    }
+      .replace(/<span\b[^>]*eb-extra[^>]*>/gi, "\n")
+      .replace(/<\/span>/gi, "")
+      .replace(/<span\b[^>]*eb-label[^>]*>/gi, "");
+    msg = stripAllMarkup(msg);
     // A stray wrapping quote pair must never survive into the rendered text
     // (it made the message look like a code dump: `"btw teh aa msg karyo…"`).
     msg = msg.replace(/^\s*["\u201c]/, "").replace(/["\u201d]\s*$/, "");
@@ -3961,11 +4084,15 @@
     note = trimEntryLines(note.join("\n"));
     // Fold an over-long message into a proper word-boundary preview (…)
     main = compactPreview(main);
-    let html = main.map(l => escapeHtml(l)).join("\n");
+    // RAW-HTML LEAK KILLER (bubble side): EVERY text unit that goes into the
+    // bubble passes through finalScrub() before escaping — leftover entities,
+    // tag fragments or wrapping quotes baked into old cloud rows can no
+    // longer survive into the page as visible HTML code on ANY entry.
+    let html = main.map(l => escapeHtml(finalScrub(l))).join("\n");
     if (felt.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">💭 How I felt: </span>" +
-      felt.map(l => escapeHtml(l)).join("\n") + "</span>";
+      felt.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
     if (note.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">📝 Note: </span>" +
-      note.map(l => escapeHtml(l)).join("\n") + "</span>";
+      note.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
     return html;
   }
 
