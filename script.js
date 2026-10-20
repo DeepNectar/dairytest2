@@ -112,22 +112,29 @@
       // Defensive de-duplication by id: even if the same entry ever reached
       // the cloud twice (e.g. two imports racing), the screen must never show
       // it twice — importing 400 entries must show 400 entries, not more.
+      //
+      // ONE SHARED RENDER PIPELINE FOR EVERY ENTRY (the "some entries still
+      // show raw HTML" fix): previously this load path ran the body through
+      // finalScrub() — a PLAIN-TEXT flattener that also peels the canonical
+      // wrapping quotes. The scrubbed body was then fed BACK into
+      // formatBookBodyHtml() by the cards and booklet, whose output passed
+      // through finalScrub() AGAIN — stripping the very <span class="eb-
+      // extra"> / eb-label markup the renderer had just produced. Result:
+      // legacy-imported entries displayed their 💭 "How I felt:" note glued
+      // onto the message with leftover &quot; entities — raw code — while
+      // hand-written entries rendered as pretty formatted bubbles. Now the
+      // cache stores the CANONICAL plain-text shape only (normaliseStored-
+      // Body), exactly what a fresh save writes, and EVERY page renders it
+      // through the single styled pipeline below. No double-scrubbing, no
+      // divergent formatting: all entries — first or last — preview
+      // identically as formatted HTML.
       const seenIds = new Set();
       const uniq = [];
       rows.forEach((r) => {
         const key = String(r.id);
         if (seenIds.has(key)) return;
         seenIds.add(key);
-        const cleanBody = normaliseStoredBody(r.body, r.sender);
-        // RAW-HTML LEAK KILLER (storage side): the canonical body still wraps
-        // the message in plain quotes — e.g. `Name: "btw teh aa msg karyo…"` —
-        // and escapeHtml() turns those legitimate quote characters into
-        // &quot; entities, which made the FIRST imported entry of every page
-        // look like an HTML code dump (`&quot;btw …&quot;<span class="eb-
-        // extra">…`). Scrubbing here too removes every tag/entity AND the
-        // wrapping quotes before the text is ever handed to a renderer, so no
-        // entry on any page can show raw code anymore.
-        uniq.push({ id: Number(r.id), title: r.title, body: finalScrub(cleanBody), mood: r.mood, sender: r.sender, heading: r.heading || "", date: r.date, words: r.words });
+        uniq.push({ id: Number(r.id), title: r.title, body: normaliseStoredBody(r.body, r.sender), mood: r.mood, sender: r.sender, heading: r.heading || "", date: r.date, words: r.words });
       });
       // ENTRY NUMBER of the BOOKLET (1, 2, 3 … till the end): assigned here in
       // strict chronological order — the exact order the book flows pages — so
@@ -492,31 +499,26 @@
         ? '<span class="sender-badge ' + (en.sender === "Deep" ? "badge-deep" : "badge-chota") + '">📨 ' + escapeHtml(en.sender) + "</span>"
         : "";
       const noBadge = en.entryNo ? '<span class="entry-no">#' + en.entryNo + "</span>" : "";
-      // COMPACT PREVIEW on the cards: the stored body first goes through
-      // normaliseStoredBody() — legacy rows can carry baked-in markup
-      // (<div class='eb-heading-band'>…, &quot; entities, "How I felt:"
-      // spans) which would otherwise show up as raw HTML CODE on the card
-      // (the broken look of the very first imported entry). Then the clean
-      // canonical text is TRIMMED (blank lines and stray dashes dropped)
-      // exactly like the booklet bubble; CSS folds anything still long into
-      // a tidy preview with an ellipsis. The full text remains untouched.
-      const previewBodyRaw = normaliseStoredBody(en.body, en.sender);
-      // THE CARD IS A FORMATTED PREVIEW — NEVER A CODE DUMP: the body runs
-      // through the very same renderer the booklet bubbles use
-      // (formatBookBodyHtml), so the first imported entry — and every legacy
-      // row whose body still carries baked-in markup (<div class='eb-heading-
-      // band'>…, &quot; entities, <span class="eb-extra">…</span>) — shows up
-      // as nicely LABELLED TEXT ("💭 How I felt: …"), not raw HTML source.
-      // Previously the sender prefix and the wrapping quotes were left inside
-      // the escaped card text, which made the whole entry look like code.
-      let cleanPreview = stripSenderPrefix(formatBookBodyHtml(previewBodyRaw, en.sender), en.sender);
-      // RAW-HTML LEAK KILLER (render side): finalScrub() flattens EVERY tag,
-      // entity and wrapping quote left by formatBookBodyHtml (its own markup
-      // labels are re-added below by the CSS-styled card, so the card text is
-      // pure content). Nothing escapeHtml() renders can look like code now.
-      cleanPreview = finalScrub(cleanPreview)
-        .replace(/<br\s*\/?>/gi, "\n");
-      const previewBody = trimEntryLines(cleanPreview).join("\n");
+      // COMPACT PREVIEW on the cards — FORMATTED, IDENTICAL TO THE BOOKLET:
+      // the card body now runs through the EXACT same renderer the booklet
+      // bubbles use (formatBookBodyHtml), so every entry — hand-written or
+      // legacy-imported, first on the page or last — is formatted the same
+      // way: the message line plus a styled 💭 "How I felt:" / 📝 "Note:"
+      // block. The old path double-scrubbed the renderer's own markup with
+      // finalScrub(), which glued the felt note onto the message and left
+      // &quot; entities visible — the raw-HTML look some entries still had.
+      // Now only CONTENT units are scrubbed (inside formatBookBodyHtml),
+      // never the presentation markup, and the card simply re-emits that
+      // markup with its own CSS classes below.
+      const previewBodyHtml = formatBookBodyHtml(en.body, en.sender);
+      // Turn the bubble HTML into card-safe markup: <span class="eb-extra">
+      // becomes a block-level .felt line (a <span> inside the pre-wrap <p>
+      // would not break onto its own row), the eb-label keeps its styling.
+      // Nothing else in the string can contain markup (every content unit was
+      // finalScrub()-flattened + escapeHtml()-escaped by the renderer).
+      const previewBody = previewBodyHtml
+        .replace(/<span class="eb-extra"><span class="eb-label">/g, '<br><span class="felt"><span class="eb-label">')
+        .replace(/<\/span><\/span>/g, "</span></span>");
       article.innerHTML =
         "<header>" +
           "<h3>" + noBadge + en.mood + " " + escapeHtml(en.title) + "</h3>" +
@@ -524,7 +526,7 @@
           senderBadge +
           (en.heading ? '<span class="heading-badge">📂 ' + escapeHtml(en.heading) + "</span>" : "") +
         "</header>" +
-        '<p class="body">' + escapeHtml(previewBody) + "</p>" +
+        '<p class="body">' + previewBody + "</p>" +
         "<footer>" +
           '<button class="del" data-id="' + en.id + '">🗑 Delete</button>' +
         "</footer>";
@@ -2340,9 +2342,15 @@
       // cleanly at real line boundaries with byte-identical bubble markup.
 
       // Split the bubble body into whole SOURCE lines. Runs of text between
-      // "\n" characters and "<br>" tags become units; block tags (<div>,
-      // <span class=eb-extra>…) are flattened because pre-wrap inside the
-      // .entry-body renders their text content as ordinary wrapped lines.
+      // "\n" characters and "<br>" tags become units. The renderer joins its
+      // message lines with <br>, and closes every eb-extra/eb-label span on
+      // its own line — so a naive split can NEVER tear a tag in half; each
+      // unit is either plain escaped content or a complete, well-formed
+      // markup fragment. (This is why formatBookBodyHtml uses <br> joins and
+      // puts the extra-block closing tags on their own lines: a split entry
+      // — which is exactly what the FIRST entry of a page often is — must
+      // carry whole tags per line, or the leftover `<span class="eb-…">`
+      // source would show up as raw HTML code on the next page.)
       const splitSourceLines = (html) => {
         const units = [];
         String(html || "").split(/<br\s*\/?>/i).forEach((chunk) => {
@@ -2374,9 +2382,15 @@
       const bodyOf = (n) => {
         let out = "";
         for (let i = 0; i < n && i < srcUnits.length; i++) {
-          // finalScrub: a split bubble's lines come straight from the htmlBody
-          // string — scrub every unit so no raw markup can show on any page.
-          out += "<div class='eb-line'>" + (srcUnits[i] ? escapeHtml(finalScrub(srcUnits[i])) : "&nbsp;") + "</div>";
+          // NO scrubbing here: srcUnits come from formatBookBodyHtml()'s own
+          // output, whose content was already finalScrub()-flattened and
+          // escapeHtml()-escaped. Re-scrubbing a unit like `<span class="eb-
+          // extra"><span class="eb-label">💭 How I felt: </span>She was…`
+          // used to STRIP the label markup and glue the felt note onto the
+          // message with leftover &quot; entities — raw HTML on every SPLIT
+          // entry (the first entry of a page is exactly where long entries
+          // get split). The presentation tags must survive untouched.
+          out += "<div class='eb-line'>" + (srcUnits[i] || "&nbsp;") + "</div>";
         }
         return out;
       };
@@ -4084,15 +4098,27 @@
     note = trimEntryLines(note.join("\n"));
     // Fold an over-long message into a proper word-boundary preview (…)
     main = compactPreview(main);
-    // RAW-HTML LEAK KILLER (bubble side): EVERY text unit that goes into the
-    // bubble passes through finalScrub() before escaping — leftover entities,
-    // tag fragments or wrapping quotes baked into old cloud rows can no
-    // longer survive into the page as visible HTML code on ANY entry.
-    let html = main.map(l => escapeHtml(finalScrub(l))).join("\n");
-    if (felt.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">💭 How I felt: </span>" +
-      felt.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
-    if (note.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">📝 Note: </span>" +
-      note.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
+    // RAW-HTML LEAK KILLER (content side): every TEXT unit that goes into
+    // the bubble passes through finalScrub() BEFORE escaping — leftover
+    // entities, tag fragments or wrapping quotes baked into old cloud rows
+    // can no longer survive into the page as visible HTML code on ANY entry.
+    // The renderer's OWN presentation markup (eb-extra / eb-label spans) is
+    // added after scrubbing and is never re-scrubbed downstream; lines are
+    // joined with <br> (not "\n") so a split/paginated piece keeps whole,
+    // well-formed tags per source line — the markup can never be torn apart
+    // and leak onto the page as raw code.
+    let html = main.map(l => escapeHtml(finalScrub(l))).join("<br>");
+    // Every tag of an extra block sits on its OWN source line: the opening
+    // spans end a line, the content lines follow, and the closing </span>s
+    // form a line of their own. splitSourceLines() in the paginator can then
+    // never tear a tag apart when a long entry is split across pages — each
+    // piece carries whole, balanced-enough markup, so no raw HTML source can
+    // leak onto the next page (previously the glued "</span></span>" could
+    // land mid-split and render as visible code on the FIRST entry of a page).
+    if (felt.length) html += "<span class=\"eb-extra\">\n<span class=\"eb-label\">💭 How I felt: </span>\n" +
+      felt.map(l => escapeHtml(finalScrub(l))).join("<br>") + "\n</span>\n";
+    if (note.length) html += "<span class=\"eb-extra\">\n<span class=\"eb-label\">📝 Note: </span>\n" +
+      note.map(l => escapeHtml(finalScrub(l))).join("<br>") + "\n</span>\n";
     return html;
   }
 
