@@ -1,11 +1,156 @@
-var DEEP_NAME="Deep";
-var CHOTA_NAME="🫰🫶🏻Chota Don❣️❤️😘";
-var normSender=(s)=>String(s==null?"":s).normalize("NFC").replace(/[\uFE0E\uFE0F]/g,"").toLowerCase().trim();
-var BOOK_PREVIEW_MAX_LINES=14;
-var BOOK_PREVIEW_MAX_CHARS=620;
-var ENTITY_TRACE_RE = /&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/;
-var TAG_TRACE_RE = /<[a-zA-Z\/!>][^>]*>?|</;
-  function decodeHtmlEntitiesLite(s) {
+var m = {};
+const DEEP_NAME = "Deep";
+const CHOTA_NAME = "🫰🫶🏻Chota Don❣️❤️😘"; // exact sender name for her messages
+
+
+const BOOK_PREVIEW_MAX_CHARS = 620;
+const BOOK_PREVIEW_MAX_LINES = 14;
+
+function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  
+const normSender = (s) => String(s == null ? "" : s)
+    .normalize("NFC")
+    .replace(/[\uFE0E\uFE0F]/g, "")   // drop VS15/VS16 spelling variants
+    .toLowerCase()
+    .trim();
+  
+function stripSenderPrefix(body, sender) {
+    let t = String(body || "");
+    // 1) Normalised sender prefix:  "🫰🫶🏻Chota Don❣️❤️😘: …" — matched on
+    //    VS16/case-folded strings but CUT at the real colon position of the
+    //    ORIGINAL text (norm strips characters, so indices are recomputed by
+    //    locating the first ':' after the name region). Legacy rows may also
+    //    wrap the NAME in quotes ("Name": "msg") — the leading quote pair is
+    //    dropped first so this step can recognise the prefix; leaving it in
+    //    used to duplicate the sender and leak &quot; raw code into the very
+    //    first imported entry of every page.
+    const ns = normSender(sender);
+    if (ns) {
+      let head = t.replace(/^[\s\uFEFF]+/, "").replace(/^["\u201c][\s]*/, "");
+      const nh = normSender(head.slice(0, ns.length + 8));
+      if (nh.startsWith(ns)) {
+        const cut = head.search(/^[^\r\n:]{1,80}?\s*:/);
+        if (cut !== -1) {
+          const colon = head.slice(0, 120).indexOf(":");
+          if (colon !== -1) t = head.slice(colon + 1).replace(/^\s+/, "");
+        }
+      } else {
+        t = head; // keep the un-wrapped start for the later quote handling
+      }
+    }
+    // 2) Generic known-name prefix (legacy rows may store a different
+    //    spelling than the column carries):  AnyKnownName: rest
+    const startsWithSender = ns && normSender(t.slice(0, ns.length + 8)).startsWith(ns);
+    if (!startsWithSender) {
+      const gm = t.match(/^\s*([^\r\n":<>]{1,60}?)\s*:\s/);
+      if (gm) {
+        const cand = normSender(gm[1]);
+        if (cand === normSender(DEEP_NAME) || cand === normSender(CHOTA_NAME) ||
+            (ns && cand === ns)) {
+          t = t.slice(gm[0].length);
+        }
+      }
+    }
+    // Drop ONE wrapping pair of quotes around the message. The canonical
+    // stored shape is  Name: "msg"  (the message may span several lines and
+    // felt/note lines follow), so this MUST succeed for every clean entry —
+    // when it silently fails, the leading `"` survives into the rendered
+    // body and the whole bubble shows up as raw code-like text instead of a
+    // formatted preview. Accepted shapes:
+    //   1) one-line message:      "msg"            (rest may follow on later lines)
+    //   2) multi-line message:    "line1\nline2"   (closing quote ends its own line)
+    //   3) unterminated legacy:   "msg             (no closing quote at all)
+    // Legacy rows can still wear ENTITY quotes ("&quot;msg&quot;" or even the
+    // double-escaped "&amp;quot;") — decode those wrappers first so every
+    // shape below recognises them and no `&quot;` can leak as visible code.
+    for (let e = 0; e < 4; e++) {
+      const be = t;
+      t = t.replace(/^(&(?:amp|quot|#0?39);)+/i, '"')
+           .replace(/(&(?:amp|quot|#0?39);)+(?=\r?\n|$)/gi, '"');
+      if (t === be) break;
+    }
+    let qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d][ \t]*(?=\r?\n|$)/);
+    if (!qm) qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d](?=\s*💭|\s*(?:How|What)\s+[Ii]\s+felt|$)/);
+    if (qm) { t = qm[1] + t.slice(qm[0].length); }
+    else {
+      // Multi-line quoted message: opening quote on the first line, closing
+      // quote at the END of a later line (before any What-I-felt / Note line).
+      const ml = t.match(/^[\s\uFEFF]*["\u201c]([\s\S]*?)["\u201d][ \t]*(?=\r?\n(?:What I felt|Note):|\r?\n$|$)/i);
+      if (ml && !/^\s*(?:💭[ \t]*)?(?:What I felt|Note)\s*:/i.test(ml[1])) {
+        t = ml[1] + t.slice(ml[0].length);
+      } else {
+        // Unterminated wrapper (legacy rows saved without the closing quote):
+        // strip the lone opening quote AND a lone trailing quote so neither
+        // can ever leak into the preview as raw code.
+        const un = t.match(/^[\s\uFEFF]*["\u201c]([\s\S]*)$/);
+        if (un) t = un[1];
+      }
+    }
+    // Any lone wrapping quote that survived (e.g. a closing &quot;-quote glued
+    // to the 💭 label by a legacy save) must never show at the ends of the
+    // preview text — peel plain AND entity quotes from both ends.
+    t = t.replace(/^(?:\s|\uFEFF|["\u201c]|&(?:amp|quot|#0?39);)+/i, "")
+         .replace(/(?:["\u201d]|&(?:amp|quot|#0?39);)+\s*$/i, "");
+    return t.replace(/^\r?\n/, "");
+  }
+
+  // Pretty HTML for the inside of a message bubble: the plain message first,
+  // then its related extras with soft labels ("How I felt", "Note").
+  // ---- COMPACT ENTRY TRIMMER (preview + PDF get the SAME trimmed text) ----
+  // One entry is kept COMPACT in the booklet: leading/trailing blank lines and
+  // stray dashes are dropped, consecutive blanks collapse to a single spacer,
+  // over-long messages fold into a proper preview that ENDS ON A WORD BOUNDARY
+  // with an ellipsis (…) — never mid-word, never hanging past the page edge.
+  // The full text always stays untouched in Supabase; only the rendered
+  // preview is compacted. Entries that fit comfortably render whole.
+  const BOOK_PREVIEW_MAX_CHARS = 620;   // ~14 ruled rows — one tidy diary block
+  const BOOK_PREVIEW_MAX_LINES  = 14;   // hard line cap per bubble body
+
+  
+function trimEntryLines(text) {
+    const out = [];
+    String(text || "").split(/\r?\n/).forEach((ln) => {
+      const t = ln.replace(/^\s*[-–—]+\s*$/, "").trim();   // bare "---" separators vanish
+      if (!t) { if (out.length && out[out.length - 1] !== "") out.push(""); return; }
+      out.push(t.replace(/[ \t]+/g, " "));                 // inner double spaces collapse
+    });
+    while (out.length && !out[out.length - 1]) out.pop();  // trailing blanks trimmed
+    while (out.length && !out[0]) out.shift();             // leading blanks trimmed
+    return out;
+  }
+
+  // Fold an over-long preview so it breaks on a WHOLE-WORD boundary and ends
+  // with "…". Both the character budget AND the hard line cap are enforced,
+  // so no entry can ever render as a wall of text in the booklet preview.
+  
+function compactPreview(lines) {
+    if (!lines.length) return lines;
+    let out = lines;
+    // 1) hard line cap first — a long entry must never exceed MAX_LINES rows
+    if (out.length > BOOK_PREVIEW_MAX_LINES) {
+      out = trimEntryLines(out.slice(0, BOOK_PREVIEW_MAX_LINES).join("\n") + "\n…");
+    }
+    // 2) character budget — fold on a whole-word boundary, end with "…"
+    const joined = out.join("\n");
+    if (joined.length <= BOOK_PREVIEW_MAX_CHARS && out.length <= BOOK_PREVIEW_MAX_LINES) {
+      return out;                                          // already compact — show whole
+    }
+    const cutAt = joined.lastIndexOf(" ", BOOK_PREVIEW_MAX_CHARS - 1);
+    const keep = (cutAt > 40 ? joined.slice(0, cutAt) : joined.slice(0, BOOK_PREVIEW_MAX_CHARS - 1))
+      .replace(/[,.;:!?'"\u201c\u201d\u2018\u2019\s]+$/, "");  // tidy the cut edge
+    return trimEntryLines(keep + "\n…");
+  }
+
+  
+function decodeHtmlEntitiesLite(s) {
     return String(s || "")
       .replace(/&quot;/g, '"')
       .replace(/&#0?39;/g, "'")
@@ -16,39 +161,9 @@ var TAG_TRACE_RE = /<[a-zA-Z\/!>][^>]*>?|</;
       .replace(/&amp;/g, "&");
   }
 
-  function decodeAllEntities(s) {
-    return String(s || "")
-      .replace(/&#x([0-9a-fA-F]+);/g, (_m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return _m; } })
-      .replace(/&#(\d+);/g, (_m, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return _m; } })
-      .replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&nbsp;/gi, " ")
-      .replace(/&ldquo;/gi, "\u201c").replace(/&rdquo;/gi, "\u201d")
-      .replace(/&lsquo;/gi, "\u2018").replace(/&rsquo;/gi, "\u2019")
-      .replace(/&mdash;/gi, "\u2014").replace(/&ndash;/gi, "\u2013")
-      .replace(/&hellip;/gi, "\u2026").replace(/&middot;/gi, "\u00b7")
-      .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
-  }
-
-  function stripAllMarkup(text) {
-    let t = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
-    for (let pass = 0; pass < 6; pass++) {
-      const before = t;
-      t = t
-        .replace(/<\s*(?:script|style)\b[^>]*>[\s\S]*?<\s*\/\s*(?:script|style)\s*>/gi, " ")
-        .replace(/<\s*br\s*\/?>\s*/gi, "\n")
-        .replace(/<\s*\/(?:div|p|li|ul|ol|blockquote|h[1-6])\s*>/gi, "\n")
-        .replace(/<[^>]*>/g, "");
-      // Decode entity sequences whenever decoding can ONLY remove characters
-      // (every named/numeric entity is longer than the character it stands
-      // for). A plain "&" typed by the user ("R&D", "me & you") is NOT an
-      // entity sequence and is never touched — legitimate text stays intact.
-      if (/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/.test(t)) {
-        t = decodeAllEntities(t);
-      }
-      if (t === before) break;                 // fixed point reached
-    }
-    return t;
-  }
-
+  
+const ENTITY_TRACE_RE = /&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/;
+  const TAG_TRACE_RE    = /<[a-zA-Z/!/][^>]*>?|</;
   function finalScrub(text) {
     let t = String(text == null ? "" : text);
     for (let pass = 0; pass < 8; pass++) {
@@ -78,7 +193,82 @@ var TAG_TRACE_RE = /<[a-zA-Z\/!>][^>]*>?|</;
     return t.trim();
   }
 
-  function normaliseStoredBody(body, sender) {
+  
+function decodeAllEntities(s) {
+    return String(s || "")
+      .replace(/&#x([0-9a-fA-F]+);/g, (_m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return _m; } })
+      .replace(/&#(\d+);/g, (_m, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return _m; } })
+      .replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&nbsp;/gi, " ")
+      .replace(/&ldquo;/gi, "\u201c").replace(/&rdquo;/gi, "\u201d")
+      .replace(/&lsquo;/gi, "\u2018").replace(/&rsquo;/gi, "\u2019")
+      .replace(/&mdash;/gi, "\u2014").replace(/&ndash;/gi, "\u2013")
+      .replace(/&hellip;/gi, "\u2026").replace(/&middot;/gi, "\u00b7")
+      .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
+  }
+  function stripAllMarkup(text) {
+    let t = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
+    for (let pass = 0; pass < 6; pass++) {
+      const before = t;
+      t = t
+        .replace(/<\s*(?:script|style)\b[^>]*>[\s\S]*?<\s*\/\s*(?:script|style)\s*>/gi, " ")
+        .replace(/<\s*br\s*\/?>\s*/gi, "\n")
+        .replace(/<\s*\/(?:div|p|li|ul|ol|blockquote|h[1-6])\s*>/gi, "\n")
+        .replace(/<[^>]*>/g, "");
+      // Decode entity sequences whenever decoding can ONLY remove characters
+      // (every named/numeric entity is longer than the character it stands
+      // for). A plain "&" typed by the user ("R&D", "me & you") is NOT an
+      // entity sequence and is never touched — legitimate text stays intact.
+      if (/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/.test(t)) {
+        t = decodeAllEntities(t);
+      }
+      if (t === before) break;                 // fixed point reached
+    }
+    return t;
+  }
+
+  // ---------- FINAL RENDER SCRUB (last line of defence) ----------
+  // escapeHtml() turns every "<" into "&lt;", so ANY markup that ever reaches
+  // a renderer is displayed as literal HTML CODE ("&lt;div class='eb-heading-
+  // band'&gt;…", "&quot;…&quot;", "<span class="eb-extra">…") — exactly the
+  // raw-code entries still visible on some pages. No targeted regex can keep
+  // up with every old save-path variant (plain markup, single-escaped,
+  // double-escaped), so EVERY render path now funnels its text through
+  // finalScrub(): strip tags → decode entities, alternating to a fixed point,
+  // then peel stray wrapping quotes. After this call the string provably
+  // contains NO tag and NO entity sequence — only plain text can be rendered.
+  const ENTITY_TRACE_RE = /&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,7}|#x[0-9a-fA-F]{1,6});/;
+  const TAG_TRACE_RE    = /<[a-zA-Z/!/][^>]*>?|</;
+  function finalScrub(text) {
+    let t = String(text == null ? "" : text);
+    for (let pass = 0; pass < 8; pass++) {
+      const before = t;
+      if (TAG_TRACE_RE.test(t) || ENTITY_TRACE_RE.test(t)) t = stripAllMarkup(t);
+      // A lone leftover ampersand-entity fragment (e.g. "&amp" cut mid-word)
+      // must never display as code either.
+      t = t.replace(/&(?:amp|quot|#0?39){1,5}(?![a-zA-Z0-9;])/g, "");
+      if (t === before) break;
+    }
+    // Wrapping quote pairs left by legacy saves made clean text look like a
+    // code dump ("btw teh aa msg karyo…" with stray quotes glued around it).
+    // Peel PLAIN and ENTITY quote forms (&quot;, &#39;, &amp;quot;…) from the
+    // very start/end of the whole text AND of every single line — a closing
+    // &quot;-quote glued to a 💭 label mid-text used to survive as visible
+    // raw code on the first imported entry of each page.
+    // Decode ANY leftover entity sequence first (&quot; → ", &amp; → &) so no
+    // entity can ever display as code, then peel only QUOTE CHARACTERS from
+    // the outer ends. Quotes inside the message ("Today you said \"I trust
+    // you\"") are legitimate content and are preserved.
+    for (let w = 0; w < 4; w++) {
+      const bw = t;
+      if (ENTITY_TRACE_RE.test(t)) t = decodeAllEntities(t);
+      t = t.replace(/^[\s\uFEFF]*["\u201c]+/, "").replace(/["\u201d]+[\s]*$/, "");
+      if (t === bw) break;
+    }
+    return t.trim();
+  }
+
+  
+function normaliseStoredBody(body, sender) {
     // IDEMPOTENCY GUARD: loadEntriesFromCloud() already stores the CLEAN
     // canonical shape back into entriesCache. Every render path calls this
     // function AGAIN on that already-clean text (card previews call it a
@@ -187,7 +377,13 @@ var TAG_TRACE_RE = /<[a-zA-Z\/!>][^>]*>?|</;
     return out;
   }
 
-  function formatBookBodyHtml(rawBody, sender) {
+  // Pretty HTML for the inside of a message bubble: the plain message first,
+  // then its related extras with soft labels ("How I felt", "Note"). Every
+  // part is TRIMMED and COMPACTED through trimEntryLines()/compactPreview()
+  // before rendering, so the booklet preview shows a tidy block that always
+  // ends on a word boundary — never ragged, never hanging past the page edge.
+  
+function formatBookBodyHtml(rawBody, sender) {
     // IMPORT-FIX: imported entries store their extras in the RAW body text
     // ("Sender: \"msg\"\nWhat I felt: ...\nNote: ..."). Normal sent entries
     // keep them in separate fields, and LEGACY rows may even carry baked-in
@@ -231,133 +427,29 @@ var TAG_TRACE_RE = /<[a-zA-Z\/!>][^>]*>?|</;
     note = trimEntryLines(note.join("\n"));
     // Fold an over-long message into a proper word-boundary preview (…)
     main = compactPreview(main);
-    // RAW-HTML LEAK KILLER (bubble side): EVERY text unit that goes into the
-    // bubble passes through finalScrub() before escaping — leftover entities,
-    // tag fragments or wrapping quotes baked into old cloud rows can no
-    // longer survive into the page as visible HTML code on ANY entry.
-    let html = main.map(l => escapeHtml(finalScrub(l))).join("\n");
-    if (felt.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">💭 How I felt: </span>" +
-      felt.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
-    if (note.length) html += "<span class=\"eb-extra\"><span class=\"eb-label\">📝 Note: </span>" +
-      note.map(l => escapeHtml(finalScrub(l))).join("\n") + "</span>";
+    // RAW-HTML LEAK KILLER (content side): every TEXT unit that goes into
+    // the bubble passes through finalScrub() BEFORE escaping — leftover
+    // entities, tag fragments or wrapping quotes baked into old cloud rows
+    // can no longer survive into the page as visible HTML code on ANY entry.
+    // The renderer's OWN presentation markup (eb-extra / eb-label spans) is
+    // added after scrubbing and is never re-scrubbed downstream; lines are
+    // joined with <br> (not "\n") so a split/paginated piece keeps whole,
+    // well-formed tags per source line — the markup can never be torn apart
+    // and leak onto the page as raw code.
+    let html = main.map(l => escapeHtml(finalScrub(l))).join("<br>");
+    // Every tag of an extra block sits on its OWN source line: the opening
+    // spans end a line, the content lines follow, and the closing </span>s
+    // form a line of their own. splitSourceLines() in the paginator can then
+    // never tear a tag apart when a long entry is split across pages — each
+    // piece carries whole, balanced-enough markup, so no raw HTML source can
+    // leak onto the next page (previously the glued "</span></span>" could
+    // land mid-split and render as visible code on the FIRST entry of a page).
+    if (felt.length) html += "<span class=\"eb-extra\">\n<span class=\"eb-label\">💭 How I felt: </span>\n" +
+      felt.map(l => escapeHtml(finalScrub(l))).join("<br>") + "\n</span>\n";
+    if (note.length) html += "<span class=\"eb-extra\">\n<span class=\"eb-label\">📝 Note: </span>\n" +
+      note.map(l => escapeHtml(finalScrub(l))).join("<br>") + "\n</span>\n";
     return html;
   }
 
-  function stripSenderPrefix(body, sender) {
-    let t = String(body || "");
-    // 1) Normalised sender prefix:  "🫰🫶🏻Chota Don❣️❤️😘: …" — matched on
-    //    VS16/case-folded strings but CUT at the real colon position of the
-    //    ORIGINAL text (norm strips characters, so indices are recomputed by
-    //    locating the first ':' after the name region). Legacy rows may also
-    //    wrap the NAME in quotes ("Name": "msg") — the leading quote pair is
-    //    dropped first so this step can recognise the prefix; leaving it in
-    //    used to duplicate the sender and leak &quot; raw code into the very
-    //    first imported entry of every page.
-    const ns = normSender(sender);
-    if (ns) {
-      let head = t.replace(/^[\s\uFEFF]+/, "").replace(/^["\u201c][\s]*/, "");
-      const nh = normSender(head.slice(0, ns.length + 8));
-      if (nh.startsWith(ns)) {
-        const cut = head.search(/^[^\r\n:]{1,80}?\s*:/);
-        if (cut !== -1) {
-          const colon = head.slice(0, 120).indexOf(":");
-          if (colon !== -1) t = head.slice(colon + 1).replace(/^\s+/, "");
-        }
-      } else {
-        t = head; // keep the un-wrapped start for the later quote handling
-      }
-    }
-    // 2) Generic known-name prefix (legacy rows may store a different
-    //    spelling than the column carries):  AnyKnownName: rest
-    const startsWithSender = ns && normSender(t.slice(0, ns.length + 8)).startsWith(ns);
-    if (!startsWithSender) {
-      const gm = t.match(/^\s*([^\r\n":<>]{1,60}?)\s*:\s/);
-      if (gm) {
-        const cand = normSender(gm[1]);
-        if (cand === normSender(DEEP_NAME) || cand === normSender(CHOTA_NAME) ||
-            (ns && cand === ns)) {
-          t = t.slice(gm[0].length);
-        }
-      }
-    }
-    // Drop ONE wrapping pair of quotes around the message. The canonical
-    // stored shape is  Name: "msg"  (the message may span several lines and
-    // felt/note lines follow), so this MUST succeed for every clean entry —
-    // when it silently fails, the leading `"` survives into the rendered
-    // body and the whole bubble shows up as raw code-like text instead of a
-    // formatted preview. Accepted shapes:
-    //   1) one-line message:      "msg"            (rest may follow on later lines)
-    //   2) multi-line message:    "line1\nline2"   (closing quote ends its own line)
-    //   3) unterminated legacy:   "msg             (no closing quote at all)
-    // Legacy rows can still wear ENTITY quotes ("&quot;msg&quot;" or even the
-    // double-escaped "&amp;quot;") — decode those wrappers first so every
-    // shape below recognises them and no `&quot;` can leak as visible code.
-    for (let e = 0; e < 4; e++) {
-      const be = t;
-      t = t.replace(/^(&(?:amp|quot|#0?39);)+/i, '"')
-           .replace(/(&(?:amp|quot|#0?39);)+(?=\r?\n|$)/gi, '"');
-      if (t === be) break;
-    }
-    let qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d][ \t]*(?=\r?\n|$)/);
-    if (!qm) qm = t.match(/^[\s\uFEFF]*["\u201c]([^\r\n]*)["\u201d](?=\s*💭|\s*(?:How|What)\s+[Ii]\s+felt|$)/);
-    if (qm) { t = qm[1] + t.slice(qm[0].length); }
-    else {
-      // Multi-line quoted message: opening quote on the first line, closing
-      // quote at the END of a later line (before any What-I-felt / Note line).
-      const ml = t.match(/^[\s\uFEFF]*["\u201c]([\s\S]*?)["\u201d][ \t]*(?=\r?\n(?:What I felt|Note):|\r?\n$|$)/i);
-      if (ml && !/^\s*(?:💭[ \t]*)?(?:What I felt|Note)\s*:/i.test(ml[1])) {
-        t = ml[1] + t.slice(ml[0].length);
-      } else {
-        // Unterminated wrapper (legacy rows saved without the closing quote):
-        // strip the lone opening quote AND a lone trailing quote so neither
-        // can ever leak into the preview as raw code.
-        const un = t.match(/^[\s\uFEFF]*["\u201c]([\s\S]*)$/);
-        if (un) t = un[1];
-      }
-    }
-    // Any lone wrapping quote that survived (e.g. a closing &quot;-quote glued
-    // to the 💭 label by a legacy save) must never show at the ends of the
-    // preview text — peel plain AND entity quotes from both ends.
-    t = t.replace(/^(?:\s|\uFEFF|["\u201c]|&(?:amp|quot|#0?39);)+/i, "")
-         .replace(/(?:["\u201d]|&(?:amp|quot|#0?39);)+\s*$/i, "");
-    return t.replace(/^\r?\n/, "");
-  }
-
-  function trimEntryLines(text) {
-    const out = [];
-    String(text || "").split(/\r?\n/).forEach((ln) => {
-      const t = ln.replace(/^\s*[-–—]+\s*$/, "").trim();   // bare "---" separators vanish
-      if (!t) { if (out.length && out[out.length - 1] !== "") out.push(""); return; }
-      out.push(t.replace(/[ \t]+/g, " "));                 // inner double spaces collapse
-    });
-    while (out.length && !out[out.length - 1]) out.pop();  // trailing blanks trimmed
-    while (out.length && !out[0]) out.shift();             // leading blanks trimmed
-    return out;
-  }
-
-  function compactPreview(lines) {
-    if (!lines.length) return lines;
-    let out = lines;
-    // 1) hard line cap first — a long entry must never exceed MAX_LINES rows
-    if (out.length > BOOK_PREVIEW_MAX_LINES) {
-      out = trimEntryLines(out.slice(0, BOOK_PREVIEW_MAX_LINES).join("\n") + "\n…");
-    }
-    // 2) character budget — fold on a whole-word boundary, end with "…"
-    const joined = out.join("\n");
-    if (joined.length <= BOOK_PREVIEW_MAX_CHARS && out.length <= BOOK_PREVIEW_MAX_LINES) {
-      return out;                                          // already compact — show whole
-    }
-    const cutAt = joined.lastIndexOf(" ", BOOK_PREVIEW_MAX_CHARS - 1);
-    const keep = (cutAt > 40 ? joined.slice(0, cutAt) : joined.slice(0, BOOK_PREVIEW_MAX_CHARS - 1))
-      .replace(/[,.;:!?'"\u201c\u201d\u2018\u2019\s]+$/, "");  // tidy the cut edge
-    return trimEntryLines(keep + "\n…");
-  }
-
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
+  
+module.exports = { normaliseStoredBody, formatBookBodyHtml, stripSenderPrefix, trimEntryLines, compactPreview, escapeHtml, finalScrub, stripAllMarkup, decodeAllEntities, DEEP_NAME, CHOTA_NAME, normSender };
