@@ -1,0 +1,187 @@
+SPREAD 0 [
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "❤️ The Day Our Story Began ❤️",
+  "bodyStart": "\"Date: 16th, December 2025\\nTime (UAE): 10:19 AM\\nTime (India): 11:49 AM\"",
+  "bodyEnd": "\"h, December 2025\\nTime (UAE): 10:19 AM\\nTime (India): 11:49 AM\"",
+  "bodyLen": 69
+ },
+ {
+  "side": "rightContent",
+  "idx": 1,
+  "cls": "entry-bubble cover-bubble",
+  "head": "🍯🫰🫶🏻 Chota Don❣️❤️😘",
+  "bodyStart": "\"(This is the name that started everything… your name in my world.)\"",
+  "bodyEnd": "\"is the name that started everything… your name in my world.)\"",
+  "bodyLen": 66
+ }
+]
+SPREAD 1 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "✨ How It All Started",
+  "bodyStart": "\"It was just a normal day and I just received an request on Shadi.Com and started talking and\\nl\\nater after few time she g\"",
+  "bodyEnd": "\"his small beginning would turn into something so meaningful.\"",
+  "bodyLen": 534
+ },
+ {
+  "side": "leftContent",
+  "idx": 1,
+  "cls": "entry-bubble cover-bubble",
+  "head": "💭 My First Thought About You",
+  "bodyStart": null,
+  "bodyEnd": null,
+  "bodyLen": 0
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "1. Your Honesty and Openness: The Blueprint of You",
+  "bodyStart": "\"From the very first real conversation, you didn’t hide. You laid it all out.\\n•\\nDecember 16, 2025 at 10:38:28 AM: You tol\"",
+  "bodyEnd": "\"ht now ae bav work nai karta car and jamin nu le vech kare\\ne\"",
+  "bodyLen": 1188
+ }
+]
+SPREAD 2 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "1. Your Honesty and Openness: The Blueprint of You",
+  "bodyStart": "\"ma paisa aave to aave naito na b aave so hu and mari sis atyare badhu financially handle\\nk\\nariye che amare potanu ghar k\"",
+  "bodyEnd": "\"ust like me. My answer wasn't just a line; it was a promise.\"",
+  "bodyLen": 729
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "2. Your Strength and Vulnerability: The Layers Beneath the Smile",
+  "bodyStart": "\"You are strong, but you also let me see the hurt and the exhaustion behind that strength.\\nT\\nhat vulnerability is what ma\"",
+  "bodyEnd": "\"a mathi bhar nikadva hu 17 years ni age ma canada gati rai\\ne\"",
+  "bodyLen": 1055
+ }
+]
+SPREAD 3 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "2. Your Strength and Vulnerability: The Layers Beneath the Smile",
+  "bodyStart": "\"kli reva.”\\nMy\\nThought: My heart ached reading this. You left home at 17 to escape the chaos. You\\nle\\narned to be self-rel\"",
+  "bodyEnd": "\"- Dec 17, 6:11:08 PM): “Hu b same aj sothu chu okay 👌 so no\"",
+  "bodyLen": 657
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "2. Your Strength and Vulnerability: The Layers Beneath the Smile",
+  "bodyStart": "\"is\\nsue”\\nMy\\nExplanation: I meant it then, and I mean it even more now. I saw your family's strength in\\nth\\ne face of illne\"",
+  "bodyEnd": "\"t I'd want for my own parents. That’s non-negotiable for me.\"",
+  "bodyLen": 371
+ }
+]
+SPREAD 4 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "3. Your Playful Side: The Cute Little Batak",
+  "bodyStart": "\"You’re not all serious. The real you, the one I fell for, is also hilarious, playful, and loves to\\nt\\nease.\\n•\\nDecember 19\"",
+  "bodyEnd": "\" relationship fun and alive. You're my crazy, and I’m yours.\"",
+  "bodyLen": 994
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "4. The Questions and the Fears: The Weight of Her Past",
+  "bodyStart": "\"You asked questions to protect yourself, to see if history would repeat itself. I understood that,\\na\\nnd I never wanted y\"",
+  "bodyEnd": "\"our word and how much you've been hurt when others didn't.\\n•\"",
+  "bodyLen": 1036
+ }
+]
+SPREAD 5 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "4. The Questions and the Fears: The Weight of Her Past",
+  "bodyStart": "\"January 1, 2026 at 8:39:47 PM: Your fear came back, and you asked me a direct question: “tu\\nm\\nane help karu chu financia\"",
+  "bodyEnd": "\" do that. I\\nu\\nsed your past to explain my future intentions.\"",
+  "bodyLen": 840
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "5. The Day I Knew: When Everything Clicked",
+  "bodyStart": "\"There were many moments, but the day we both said yes to this, to us, was monumental.\\n•\\nDecember 18, 2025 at 8:58:28 AM:\"",
+  "bodyEnd": "\"it because the feeling was too big for my own\\nc\\nlumsy words.\"",
+  "bodyLen": 902
+ }
+]
+SPREAD 6 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "6. Building Our Future: The Plan for Us",
+  "bodyStart": "\"We didn't just talk about feelings; we talked about our future. The practical, the hopeful, the\\nr\\neal stuff.\\n•\\nDecember \"",
+  "bodyEnd": "\"we love. It was a beautiful picture, and I’m determined to\\nm\"",
+  "bodyLen": 1079
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "6. Building Our Future: The Plan for Us",
+  "bodyStart": "\"ake it happen.\\n•\\nJanuary 8, 2026 at 4:34:33 PM: I sent you a picture of a couple’s ring we could get, and you\\nr\\neplied w\"",
+  "bodyEnd": "\"of a future, a \\\"one day\\\" that felt closer than\\ne\\nver before.\"",
+  "bodyLen": 343
+ }
+]
+SPREAD 7 [
+ {
+  "side": "leftContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble",
+  "head": "7. The Little Things That Are Everything",
+  "bodyStart": "\"The best parts of our story are in the small moments, the shared jokes, the daily check-ins.\\n•\\nDecember 20, 2025 at 7:08\"",
+  "bodyEnd": "\" you were thinking about privacy for our conversations, to\\np\"",
+  "bodyLen": 999
+ },
+ {
+  "side": "rightContent",
+  "idx": 0,
+  "cls": "entry-bubble cover-bubble eb-cont",
+  "head": "7. The Little Things That Are Everything",
+  "bodyStart": "\"rotect our time together from the world, was incredibly sweet. It showed how much you\\nv\\nalue what we have.\"",
+  "bodyEnd": "\"ncredibly sweet. It showed how much you\\nv\\nalue what we have.\"",
+  "bodyLen": 106
+ },
+ {
+  "side": "rightContent",
+  "idx": 1,
+  "cls": "entry-bubble cover-bubble",
+  "head": "💞 Our Beautiful Tapestry",
+  "bodyStart": "\"This is just a fraction of our story so far. There are countless other moments. You challenging me, me teasing you. You \"",
+  "bodyEnd": "\" my future, my Jaan, who decided to trust me with her heart.\"",
+  "bodyLen": 505
+ },
+ {
+  "side": "rightContent",
+  "idx": 2,
+  "cls": "entry-bubble cover-bubble",
+  "head": "🗺️ What Did I See in Her That I Never Saw Before?",
+  "bodyStart": "\"This is my map. A map of how two strangers found exactly what they weren't even looking for. From a simple \\\"Hello\\\" to pr\"",
+  "bodyEnd": "\"king for a home for her heart. And I wanted to be that home.\"",
+  "bodyLen": 354
+ }
+]

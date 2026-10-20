@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Dairy Writing — a daily writing journal. Write, save and reflect on your entries right in your browser." />
+  <!-- PWA / phone-app look: standalone fullscreen + theme colour -->
+  <meta name="theme-color" content="#b3456b" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#241a12" media="(prefers-color-scheme: dark)" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DairyWriting" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23b3456b'/%3E%3Ctext x='50' y='68' font-size='54' text-anchor='middle'%3E%E2%9C%8D%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <title>Dairy Writing ✍️ | Daily Journal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%8D%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== Header / Navbar ===== -->
+  <header class="navbar" id="top">
+    <a href="#top" class="logo">🥛 Dairy<span>Writing</span></a>
+    <a href="https://drive.google.com/file/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS/view?usp=sharing"
+       target="_blank" rel="noopener noreferrer" class="header-doc-link" title="Open our Google Drive document 💕">💕 Our Story</a>
+    <nav class="nav-links" id="navLinks">
+      <a href="#home" class="active">Home</a>
+      <a href="#about">About</a>
+      <a href="#journal">Write</a>
+      <a href="#entries">My Entries</a>
+      <a href="#" id="bookViewLink">📖 Book View</a>
+      <a href="#tips">Tips</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <div class="nav-actions">
+      <button id="authBtn" class="btn btn-primary btn-sm">Sign In</button>
+      <button id="userChip" class="user-chip hidden" title="Account menu">
+        <span class="avatar" id="userAvatar">?</span><span id="userName"></span> ▾
+      </button>
+      <div class="dropdown hidden" id="userMenu">
+        <p class="dropdown-email" id="userEmail"></p>
+        <button class="dropdown-item" id="logoutBtn">🚪 Log Out</button>
+      </div>
+      <button id="themeToggle" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+      <button class="hamburger" id="hamburger" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section class="hero" id="home">
+    <div class="hero-text reveal">
+      <p class="eyebrow">Your daily page of words</p>
+      <h1>Write a little <em>dairy-fresh</em> thought every day.</h1>
+      <p class="sub">
+        Dairy Writing is a cozy corner of the internet where you jot down your day —
+        no sign-up, no fuss. Your entries are saved safely in your own browser.
+      </p>
+      <div class="hero-btns">
+        <a href="#journal" class="btn btn-primary">Start Writing</a>
+        <a href="#about" class="btn btn-ghost">Learn More</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong id="statEntries">0</strong><span>Entries</span></div>
+        <div class="stat"><strong id="statWords">0</strong><span>Words written</span></div>
+        <div class="stat"><strong id="statStreak">0</strong><span>Day streak</span></div>
+      </div>
+    </div>
+    <div class="hero-card floaty reveal">
+      <div class="paper">
+        <div class="paper-line"></div>
+        <div class="paper-line short"></div>
+        <div class="paper-line"></div>
+        <div class="paper-line medium"></div>
+        <div class="paper-line"></div>
+        <div class="paper-line short"></div>
+        <span class="paper-emoji">📝</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== About ===== -->
+  <section class="section" id="about">
+    <h2 class="section-title reveal">Why <span>Dairy</span> Writing?</h2>
+    <p class="section-sub reveal">Because every day deserves a fresh entry — just like milk from the farm. 🐄</p>
+    <div class="cards">
+      <article class="card reveal">
+        <div class="card-icon">🗒️</div>
+        <h3>Daily Habit</h3>
+        <p>A gentle nudge to write something every single day. Small words, big reflection.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-icon">🔒</div>
+        <h3>Private & Local</h3>
+        <p>Everything is stored in your browser with localStorage. No servers, no accounts.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-icon">⚡</div>
+        <h3>Instant & Free</h3>
+        <p>Pure HTML, CSS and JavaScript. Opens fast, works offline once loaded.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===== Journal / Editor ===== -->
+  <section class="section alt" id="journal">
+    <h2 class="section-title reveal">Today's <span>Entry</span></h2>
+    <p class="section-sub reveal">What happened today? Pour your thoughts here.</p>
+
+    <div class="template-card reveal" id="templateCard">
+      <h4>📥 Import Template Format</h4>
+      <p class="template-note">Paste or upload your messages below. The name on every line decides who sent it — a message marked <strong>Deep</strong> is saved as sent by Deep only, and one marked <strong>🫰🫶🏻Chota Don❣️❤️😘</strong> is saved as sent by her only.</p>
+      <pre class="template-box" id="templateBox">========================================
+📖 COMPLETE DIARY - DEEP &amp; 🍯🫰🫶🏻 Chota Don❣️❤️😘
+========================================
+
+### Date: [DD Month YYYY]   ← e.g. "### Date: 12 January 2026"
+                          (all messages below belong to this day)
+
+---
+
+#### 🌅 Morning &amp; Night Greetings        ← heading line, keep the ####
+
+#1 - Message: [12 January 2026, 08:15 AM] - Deep: "Good morning! Did you sleep well?"
+  What I felt: Felt so happy seeing her message first thing.
+#2 - Message: [12 January 2026, 08:20 AM] - 🍯🫰🫶🏻 Chota Don❣️❤️😘: "Yes, had a crazy dream about us!"
+  What I felt: Curious and excited to hear the dream.
+
+#### 💬 Daily Life &amp; Important Updates
+#3 - Message: [12 January 2026, 01:05 PM] - Deep: "Office was busy, but thinking of you helped."
+  What I felt: Wanted her to know she is my calm in the chaos.
+
+#### 💖 Sweet Compliments &amp; Love
+#4 - Message: [12 January 2026, 09:40 PM] - 🍯🫰🫶🏻 Chota Don❣️❤️😘: "You always make me feel special."
+  What I felt: My heart melted — that's all I ever want to do.
+
+#### 👨‍👩‍👧‍👦 About Kesha (Her Sister)          ← ONLY when Kesha is mentioned
+#### 👨‍👩‍👧‍👦 About Arya (Her Brother)           ← ONLY when Arya is mentioned
+#### 🎯 Dreams &amp; Future Plans
+#### 🤗 Emotional Support &amp; Care
+#### 😄 Fun Moments &amp; Jokes
+#### 🔥 Flirty Banter &amp; Teasing
+#### 💕 Romantic Confessions
+#### 💘 Attraction &amp; Desire
+#### 🌙 Intimate &amp; Passionate Talks
+#### 💝 Deep Chemistry &amp; Connection
+
+#### 💭 My Messages To Her (No Reply Yet)
+#5 - Message: [13 January 2026, 09:00 AM] - Deep: "Hey, you didn't reply last night."
+- Note: She hasn't replied to this message yet.
+  What I felt: Waiting with my phone in hand — longing and a little worry.
+
+#### 💌 Her Messages To Me                 ← her messages when I didn't reply
+#6 - Message: [13 January 2026, 10:30 AM] - 🍯🫰🫶🏻 Chota Don❣️❤️😘: "Sorry jaan, was stuck in work!"
+  What I felt: Even an apology from her feels like a hug.
+
+---
+
+### 📌 FINAL SUMMARY - COMPLETE DIARY
+A normal day that became precious because she was in it. Morning greetings,
+busy afternoons, her dreams and my waiting — every line pulled us closer.
+
+========================================</pre>
+      <p class="template-note"><strong>Entry numbers:</strong> every <code>- Message: [date]</code> line may start with a running number — <code>#1 - Message: …</code>, <code>1. - Message: …</code> or <code>(1) - Message: …</code> — counted <strong>1, 2, 3 … till the end</strong> across all headings and days. Only the <code>Message: [12 January 2026, 08:15 AM] …</code> lines are counted; the <code>What I felt:</code> / <code>Note:</code> lines belong to the message above them and never get their own number. The number is just a label for checking big sheets — it is stripped before import and never stored in Supabase.<br /><strong>All 15 headings are supported.</strong> Use only the heading sections that have content — messages under each <code>####</code> heading are automatically filed there. Skip the headings and they'll still be auto-detected from keywords. The <code>📌 FINAL SUMMARY</code> block is saved as its own summary page in the booklet.</p>
+      <button class="btn btn-ghost btn-sm" id="copyTemplateBtn" type="button">📋 Copy Template</button>
+    </div>
+
+    <form class="editor reveal" id="entryForm" autocomplete="off">
+      <div class="sender-row">
+        <span class="sender-label">✍️ Message sent by:</span>
+        <label class="sender-option">
+          <input type="radio" name="sender" value="Deep" checked />
+          <span class="sender-pill">Deep</span>
+        </label>
+        <label class="sender-option">
+          <input type="radio" name="sender" value="🫰🫶🏻Chota Don❣️❤️😘" />
+          <span class="sender-pill">🫰🫶🏻Chota Don❣️❤️😘</span>
+        </label>
+      </div>
+      <div class="editor-meta">
+        <input type="text" id="entryTitle" placeholder="Give today a title… e.g. “A creamy Tuesday”" maxlength="80" required />
+        <select id="entryMood" title="Mood">
+          <option value="😊">😊 Happy</option>
+          <option value="😌">😌 Calm</option>
+          <option value="🤔">🤔 Thoughtful</option>
+          <option value="😴">😴 Tired</option>
+          <option value="🥲">🥲 Bittersweet</option>
+          <option value="🔥">🔥 Inspired</option>
+        </select>
+      </div>
+      <textarea id="entryBody" rows="8" placeholder="Dear Diary…" required></textarea>
+      <div class="editor-footer">
+        <span class="word-count" id="liveCount">0 words · 0 characters</span>
+        <div class="editor-btns">
+          <button type="reset" class="btn btn-ghost" id="clearBtn">Clear</button>
+          <button type="submit" class="btn btn-primary">💾 Save Entry</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- ===== Import from template ===== -->
+    <div class="import-card reveal" id="importCard">
+      <h4>📥 Import Diary (paste template or upload .txt)</h4>
+      <p class="template-note">Each line like <code>[12-01-2026 08:15] Deep: "..."</code> is imported as a message from that person only — the name in the line decides the sender automatically.</p>
+      <textarea id="importArea" rows="6" placeholder="Paste your diary here using the template format above…"></textarea>
+      <div class="import-btns">
+        <label class="btn btn-ghost btn-sm">📁 Upload .txt file
+          <input type="file" id="importFile" accept=".txt,text/plain" hidden />
+        </label>
+        <button class="btn btn-primary btn-sm" id="importBtn" type="button">🔄 Import Messages</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Entries list ===== -->
+  <section class="section" id="entries">
+    <h2 class="section-title reveal">My <span>Entries</span></h2>
+    <div class="entries-toolbar reveal">
+      <input type="search" id="searchInput" placeholder="🔍 Search your entries…" />
+      <button class="btn btn-danger-ghost" id="deleteAllBtn">Delete All</button>
+    </div>
+    <div class="entries-list" id="entriesList">
+      <!-- Entries injected by JS -->
+    </div>
+    <p class="empty-state" id="emptyState">No entries yet — your first page is waiting. ✨</p>
+  </section>
+
+  <!-- ===== Tips ===== -->
+  <section class="section alt" id="tips">
+    <h2 class="section-title reveal">Writing <span>Inspiration</span></h2>
+    <p class="section-sub reveal">Stuck? Click the button for a fresh prompt.</p>
+    <div class="prompt-box reveal">
+      <p id="promptText">“Describe the best thing that happened today in three sentences.”</p>
+      <button class="btn btn-primary" id="newPromptBtn">🎲 New Prompt</button>
+    </div>
+  </section>
+
+  <!-- ===== Contact ===== -->
+  <section class="section" id="contact">
+    <h2 class="section-title reveal">Say <span>Hello</span></h2>
+    <form class="contact-form reveal" id="contactForm">
+      <input type="email" id="contactEmail" placeholder="Your email (optional)" />
+      <textarea id="contactMsg" rows="4" placeholder="Feedback, ideas, or just a moo 🐮" required></textarea>
+      <button type="submit" class="btn btn-primary">Send Message</button>
+    </form>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <p>© <span id="year"></span> Dairy Writing · Made with HTML, CSS & JavaScript — no TypeScript, promise. 🥛</p>
+    <a href="#top" class="back-top">↑ Back to top</a>
+  </footer>
+
+  <!-- ===== Auth Modal (Signup / Sign In) ===== -->
+  <div class="modal-overlay hidden" id="authModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button class="modal-close" id="authClose" aria-label="Close">✕</button>
+      <h3 id="authTitle">Welcome back 🥛</h3>
+      <p class="modal-sub" id="authSub">Sign in to open your private diary.</p>
+      <div class="tabs">
+        <button class="tab active" id="tabSignin">Sign In</button>
+        <button class="tab" id="tabSignup">Sign Up</button>
+      </div>
+      <form id="authForm" autocomplete="off">
+        <input type="text" id="authName" class="hidden" placeholder="Your name" maxlength="40" />
+        <input type="email" id="authEmail" placeholder="Email address" required />
+        <input type="password" id="authPass" placeholder="Password" required minlength="6" />
+        <input type="password" id="authPass2" class="hidden" placeholder="Confirm password" minlength="6" />
+        <p class="form-error" id="authError"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">Sign In</button>
+      </form>
+      <p class="modal-switch" id="authSwitchText">New here? <a href="#" id="authSwitchLink">Create an account</a></p>
+    </div>
+  </div>
+
+  <!-- ===== Password-protected Delete Confirmation Modal ===== -->
+  <div class="modal-overlay hidden" id="deleteModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <button class="modal-close" id="deleteClose" aria-label="Close">✕</button>
+      <h3 id="deleteTitle">🔐 Confirm delete</h3>
+      <p class="modal-sub" id="deleteSub">Enter the secret password to delete this entry. It will be removed from the cloud as well — this cannot be undone.</p>
+      <form id="deleteForm" autocomplete="off">
+        <input type="password" id="deletePass" placeholder="Secret password" required />
+        <p class="form-error" id="deleteError"></p>
+        <div class="delete-modal-actions">
+          <button type="button" class="btn btn-ghost" id="deleteCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-danger-solid" id="deleteConfirmBtn">🗑 Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== A4 Book View (flip pages) ===== -->
+  <div class="modal-overlay hidden" id="bookModal">
+    <div class="book-wrap" role="dialog" aria-modal="true" aria-label="Diary book view">
+      <button class="modal-close book-close" id="bookClose" aria-label="Close book">✕</button>
+      <!-- ===== Phone app header bar (visible only in phone mode) ===== -->
+      <div class="app-bar" id="appBar">
+        <button class="app-back" id="appBackBtn" type="button" aria-label="Close book">‹</button>
+        <div class="app-bar-center">
+          <div class="app-bar-title">Our Love Story</div>
+          <div class="app-bar-sub" id="appBarSub">My Diary</div>
+        </div>
+        <div class="app-bar-right">
+          <button class="app-icon-btn" id="appSaveBtn" type="button" title="Save this page — the book reopens right here" aria-label="Save page">📌</button>
+          <button class="app-icon-btn" id="appPrintBtn" type="button" title="Print booklet" aria-label="Print booklet">🖨️</button>
+        </div>
+      </div>
+
+      <h3 class="book-title desktop-only-title">📖 My Diary — A4 Book View</h3>
+      <p class="book-sub desktop-only-title" id="bookOwner"></p>
+
+      <div class="book-stage">
+        <div class="book" id="book">
+          <!-- Left page -->
+          <div class="page page-left" id="pageLeft">
+            <div class="book-page-header">
+              <img class="bph-photo bph-photo-left" src="https://lh3.googleusercontent.com/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS" alt="Soulmate Code" referrerpolicy="no-referrer" draggable="false">
+              <div class="bph-title">💕 OUR LOVE STORY 💕</div>
+            </div>
+            <div class="page-inner"><div class="page-content" id="leftContent"></div></div>
+            <div class="book-page-footer">
+              <span class="page-num" id="leftNum"></span>
+              <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
+            </div>
+          </div>
+          <!-- Right page -->
+          <div class="page page-right" id="pageRight">
+            <div class="book-page-header">
+              <img class="bph-photo bph-photo-left" src="https://lh3.googleusercontent.com/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS" alt="Soulmate Code" referrerpolicy="no-referrer" draggable="false">
+              <div class="bph-title">💕 OUR LOVE STORY 💕</div>
+            </div>
+            <div class="page-inner"><div class="page-content" id="rightContent"></div></div>
+            <div class="book-page-footer">
+              <span class="page-num" id="rightNum"></span>
+              <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
+            </div>
+          </div>
+          <!-- Flipping leaf (animated) -->
+          <div class="leaf" id="leaf">
+            <div class="leaf-face leaf-front" id="leafFront">
+              <div class="book-page-header">
+                <img class="bph-photo bph-photo-left" src="https://lh3.googleusercontent.com/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS" alt="Soulmate Code" referrerpolicy="no-referrer" draggable="false">
+                <div class="bph-title">💕 OUR LOVE STORY 💕</div>
+              </div>
+              <div class="page-content"></div>
+              <div class="book-page-footer">
+                <span class="page-num"></span>
+                <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
+              </div>
+            </div>
+            <div class="leaf-face leaf-back" id="leafBack">
+              <div class="book-page-header">
+                <img class="bph-photo bph-photo-left" src="https://lh3.googleusercontent.com/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS" alt="Soulmate Code" referrerpolicy="no-referrer" draggable="false">
+                <div class="bph-title">💕 OUR LOVE STORY 💕</div>
+              </div>
+              <div class="page-content"></div>
+              <div class="book-page-footer">
+                <span class="page-num"></span>
+                <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
+              </div>
+            </div>
+          </div>
+          <div class="book-spine"></div>
+        </div>
+      </div>
+
+      <div class="book-controls desktop-only-controls">
+        <button class="btn btn-ghost" id="prevPageBtn">◀ Prev Page</button>
+        <span class="spread-indicator" id="spreadInfo">Spread 1 / 1</span>
+        <button class="btn btn-primary" id="nextPageBtn">Next Page ▶</button>
+        <button class="btn btn-save" id="saveBookBtn" type="button" title="Saves this page — next time you open the book it starts right here">📌 Save</button>
+        <button class="btn btn-print" id="printBookletBtn" type="button" title="Print every sheet at full A4 size to make a real booklet">🖨️ Print Booklet</button>
+      </div>
+      <!-- ===== Phone app bottom tab bar (visible only in phone mode) ===== -->
+      <nav class="app-tabbar" id="appTabbar">
+        <button class="app-tab" id="tabPrev" type="button"><span class="app-tab-ic">‹</span><span class="app-tab-lbl">Prev</span></button>
+        <span class="app-tab-page" id="spreadInfoPhone">Page 1 / 1</span>
+        <button class="app-tab" id="tabSave" type="button"><span class="app-tab-ic">📌</span><span class="app-tab-lbl">Save</span></button>
+        <button class="app-tab" id="tabPrint" type="button"><span class="app-tab-ic">🖨️</span><span class="app-tab-lbl">Print</span></button>
+        <button class="app-tab" id="tabNext" type="button"><span class="app-tab-ic">›</span><span class="app-tab-lbl">Next</span></button>
+      </nav>
+      <p class="book-hint">Tip: click the right page to flip forward, the left page to flip back. Use ← → arrow keys too.</p>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
