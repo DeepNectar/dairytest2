@@ -492,17 +492,24 @@
       // exactly like the booklet bubble; CSS folds anything still long into
       // a tidy preview with an ellipsis. The full text remains untouched.
       const previewBodyRaw = normaliseStoredBody(en.body, en.sender);
-      // The card shows the SAME formatted preview as the booklet bubble:
-      // baked-in legacy markup is folded to plain text (entities decoded to a
-      // fixpoint), so nothing like &quot; or <span …> ever appears as code.
-      let cleanPreview = String(previewBodyRaw || "")
-        .replace(/<div\b[^>]*eb-heading-band[^>]*>[\s\S]*?<\/div>/gi, "")
-        .replace(/<span\b[^>]*eb-extra[^>]*>\s*<span\b[^>]*eb-label[^>]*>([\s\S]*?)<\/span>/gi, "\n$1 ")
-        .replace(/<\/?(?:div|span|p|strong|em|i|b)\b[^>]*>/gi, "")
-        .replace(/<br\s*\/?>/gi, "\n");
+      // THE CARD IS A FORMATTED PREVIEW — NEVER A CODE DUMP: the body runs
+      // through the very same renderer the booklet bubbles use
+      // (formatBookBodyHtml), so the first imported entry — and every legacy
+      // row whose body still carries baked-in markup (<div class='eb-heading-
+      // band'>…, &quot; entities, <span class="eb-extra">…</span>) — shows up
+      // as nicely LABELLED TEXT ("💭 How I felt: …"), not raw HTML source.
+      // Previously the sender prefix and the wrapping quotes were left inside
+      // the escaped card text, which made the whole entry look like code.
+      let cleanPreview = stripSenderPrefix(formatBookBodyHtml(previewBodyRaw, en.sender), en.sender);
       for (let g = 0; g < 4 && /&(?:quot|#0?39|apos|nbsp|lt|gt|amp);/.test(cleanPreview); g++) {
         const b4 = cleanPreview; cleanPreview = decodeHtmlEntitiesLite(cleanPreview); if (cleanPreview === b4) break;
       }
+      // any markup that could still be present (never is, but belt & braces)
+      // is flattened to its TEXT before escaping — so nothing tag-like can
+      // ever appear on a card as code.
+      cleanPreview = cleanPreview
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<[^>]+>/g, "");
       const previewBody = trimEntryLines(cleanPreview).join("\n");
       article.innerHTML =
         "<header>" +
