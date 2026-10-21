@@ -3940,12 +3940,19 @@
   function fillLeaf(frontHTML, backHTML, frontNum, backNum) {
     const fp = $("#leafFront");
     const bp = $("#leafBack");
+    /* WRITING APPEARS ON THE FRONT SIDE ONLY. The diary is a PORTRAIT pad
+       bound at the TOP edge — when a sheet is lifted it rotates UPWARD and
+       its BACK side faces the reader mid-flight. Real flip-books print on
+       one side of each sheet only, so the back of every leaf is deliberately
+       kept BLANK plain paper here: no page content and no page number are
+       ever painted onto the back face (mirrored text / reversed numbers can
+       not appear even for a single frame). backHTML/backNum stay in the
+       signature for compatibility but are intentionally never rendered. */
     fp.querySelector(".page-content").innerHTML = frontHTML;
-    bp.querySelector(".page-content").innerHTML = backHTML;
+    bp.querySelector(".page-content").innerHTML = "";
     addStickersToPage(fp.querySelector(".page-content"), "LF" + frontNum);
-    addStickersToPage(bp.querySelector(".page-content"), "LB" + backNum);
     fp.querySelector(".page-num").textContent = frontNum;
-    bp.querySelector(".page-num").textContent = backNum;
+    bp.querySelector(".page-num").textContent = "";
   }
 
   function flipPage(dir) {
@@ -4020,20 +4027,24 @@
     if (dir === "prev" && spread <= 0) return;
 
     flipping = true;
+    /* PORTRAIT UPWARD FLIP (desktop spread): the sheet being turned lifts
+       from its BOTTOM edge and rotates UPWARD over the top binding — it is
+       NEVER a horizontal side-flip. Only the FRONT face carries writing; the
+       back face stays blank paper (see fillLeaf + .leaf-back rules). */
     if (dir === "next") {
-      // Right page lifts and flips over to become the new left page
+      // Right-hand sheet swings UP over the top edge → new left page appears
       const oldRight = spread * 2 + 1;
       const newLeft = spread * 2 + 2;
       fillLeaf(pageHTML(oldRight), pageHTML(newLeft), String(oldRight + 1), String(newLeft + 1));
       leafEl.classList.remove("flipping-back");
-      leafEl.classList.add("flipping-forward");
+      leafEl.classList.add("flipping-forward");   // flipUp keyframes (rotateX, top hinge)
     } else {
-      // Left page lifts and flips back to become the new right page
+      // Previous sheet comes back DOWN onto the right-hand side
       const oldLeft = spread * 2;
       const newRight = spread * 2 - 1;
       fillLeaf(pageHTML(oldLeft), pageHTML(newRight), String(oldLeft + 1), String(newRight + 1));
       leafEl.classList.remove("flipping-forward");
-      leafEl.classList.add("flipping-back");
+      leafEl.classList.add("flipping-back");      // flipDown keyframes (rotateX, top hinge)
     }
 
     setTimeout(() => {

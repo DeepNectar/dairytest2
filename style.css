@@ -980,7 +980,14 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   pointer-events: none;
 }
 
-/* Flipping leaf */
+/* ---- Flipping leaf — PORTRAIT NOTE-STYLE BOOK, FLIPS UPWARD ----
+   The diary is a portrait pad bound at the TOP edge (like an accounting
+   book / sticky-note pad): turning a page LIFTS THE SHEET FROM ITS BOTTOM
+   EDGE and rotates it UPWARD around the top hinge. Writing lives ONLY on
+   the FRONT face of every sheet — the back of a lifted sheet is deliberately
+   PLAIN PAPER (see .leaf-back below), never mirrored text or reversed page
+   numbers. Both faces are locked with backface-visibility:hidden so during
+   the upward rotation only the correct face is ever visible. */
 .leaf {
   position: absolute;
   top: 0;
@@ -992,15 +999,28 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   display: none;
   pointer-events: none;
 }
-.leaf.flipping-forward { left: var(--a4w); display: block; transform-origin: left center; animation: flipFwd .8s cubic-bezier(.3,.1,.3,1) forwards; }
-.leaf.flipping-back    { left: 0;            display: block; transform-origin: right center; animation: flipBack .8s cubic-bezier(.3,.1,.3,1) forwards; }
-@keyframes flipFwd  { from { transform: rotateY(0deg); }   to { transform: rotateY(-180deg); } }
-@keyframes flipBack { from { transform: rotateY(0deg); }   to { transform: rotateY(180deg); } }
+/* forward = the RIGHT-hand sheet lifts from its bottom edge and swings UP
+   over the top binding; back = the previous sheet comes back DOWN onto the
+   left side. Hinge = TOP edge in both directions (rotateX around top). */
+.leaf.flipping-forward { left: var(--a4w); display: block; transform-origin: center top; animation: flipUp .8s cubic-bezier(.3,.1,.3,1) forwards; }
+.leaf.flipping-back    { left: 0;          display: block; transform-origin: center top; animation: flipDown .8s cubic-bezier(.3,.1,.3,1) forwards; }
+@keyframes flipUp   { from { transform: rotateX(0deg); }    to { transform: rotateX(-178deg); } }
+@keyframes flipDown { from { transform: rotateX(-178deg); } to { transform: rotateX(0deg); } }
+/* WRITING ON THE FRONT SIDE ONLY: the back face of a sheet is BLANK paper —
+   no header title, no entry text, no footer stamp, no page number can ever
+   show through while the sheet is mid-flight upward. */
+.leaf-back {
+  background-image: linear-gradient(180deg, #f7f2e6, #efe7d6) !important;
+  box-shadow: inset 0 0 46px rgba(120, 90, 40, .12);
+}
+.leaf-back > .book-page-header,
+.leaf-back > .book-page-footer { visibility: hidden; }
 
 .leaf-face {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   background-color: #fffdf6;
   /* COMPACT STYLE: same plain paper as the static pages — no ruled lines */
   background-image: none;
@@ -1008,7 +1028,12 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   overflow: visible;
   box-shadow: 0 0 30px rgba(0,0,0,.15);
 }
-.leaf-back { transform: rotateY(180deg); }
+/* TOP-BOUND PAD GEOMETRY: the back face is the SAME sheet folded over the
+   top binding — a vertical (upward) mirror of the front, NOT a horizontal
+   one. That keeps the back-side text upright (never mirrored left-right)
+   while it hangs above the book during the flip; and since the writing
+   lives only on the FRONT side, this blank back stays plain paper anyway. */
+.leaf-back { transform: rotateX(180deg); }
 .leaf-face .page-inner, .leaf-face > .page-content { height: 100%; }
 /* Leaf text area = exactly the same band as .page-inner on the static pages:
    starts one row (--pad-t) under the header, ends at the footer band. */
@@ -1373,8 +1398,12 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   body.book-phone-mode .book { width: var(--a4w); }
   /* no spine down the middle of a single sheet */
   body.book-phone-mode .book-spine { display: none; }
-  /* the leaf animation anchors to the single sheet */
+  /* the leaf animation anchors to the single sheet — and on phones even the
+     generic leaf flips UPWARD around the TOP edge (portrait note pad): the
+     whole book is a top-bound flip-up diary on every device, never a
+     side-bound book that flips horizontally */
   body.book-phone-mode .leaf.flipping-forward { left: 0; }
+  body.book-phone-mode .leaf.flipping-back    { transform-origin: center top; }
 
   /* ---- PHONE UPWARD NOTE-FLIP — FRONT SIDE ONLY ----
      The page that is being turned away is a standalone clone of the CURRENT
