@@ -143,12 +143,9 @@
       // array order the cloud happened to return (date-desc), which made the
       // FIRST entry of a page carry a different number than elsewhere. The
       // number is display-only: it is never written to Supabase.
-      uniq.slice().sort((a, b) => {
-        const ta = Date.parse(a && a.date != null ? a.date : 0) || 0;
-        const tb = Date.parse(b && b.date != null ? b.date : 0) || 0;
-        if (ta !== tb) return ta - tb;
-        return (Number(a.id) || 0) - (Number(b.id) || 0);   // same instant → sheet order
-      }).forEach((en, i) => { en.entryNo = i + 1; });
+      // NO ENTRY NUMBERING anywhere in the diary (user rule): the book and
+      // the cards show the messages exactly as written — counting happens
+      // only in the separate 🧮 Message Counter panel.
       return uniq;
     } catch (e) {
       console.warn("sync: could not load entries", e);
@@ -214,13 +211,58 @@
   // never numbered differently from its siblings. Display-only: the number is
   // stripped before anything is written to Supabase.
   function assignEntryNumbers(entries) {
-    (entries || []).slice().sort((a, b) => {
-      const ta = Date.parse(a && a.date != null ? a.date : 0) || 0;
-      const tb = Date.parse(b && b.date != null ? b.date : 0) || 0;
-      if (ta !== tb) return ta - tb;
-      return (Number(a.id) || 0) - (Number(b.id) || 0);   // same instant → sheet order
-    }).forEach((en, i) => { en.entryNo = i + 1; });
+    // NO-OP BY DESIGN: entry numbers must NEVER appear inside the diary book,
+    // on the cards or in Supabase. The user's request: "it should not calculate
+    // as entry number — it should come in the book without the numbering".
+    // Counting lives ONLY in the separate 🧮 Message Counter panel. Kept as a
+    // stub so existing call-sites stay harmless.
     return entries;
+  }
+
+  // ---------- 🧮 SEPARATE MESSAGE COUNTER ----------
+  // A dedicated counter that runs OUTSIDE the diary: counting messages here
+  // never adds any "#N" numbering to the book, the cards or the cloud rows.
+  // Two things are counted, on the two sides of the calculator panel:
+  //   LEFT  side — real diary MESSAGES only. The special "📌 FINAL SUMMARY"
+  //                entry is EXCLUDED from this count (per the user's rule:
+  //                the count must stop before the summary block).
+  //   RIGHT side — everything INCLUDING the final-summary words, so the
+  //                summary can still be counted "on the other side of the
+  //                calculator" when desired.
+  function isSummaryEntry(en) {
+    return /FINAL\s*SUMMARY/i.test(String((en && en.heading) || "")) ||
+           /Final Summary/i.test(String((en && en.title) || ""));
+  }
+  function computeMessageCount() {
+    const all = loadEntries();
+    const real = all.filter((en) => !isSummaryEntry(en));
+    return {
+      total: all.length,
+      realCount: real.length,
+      realWords: real.reduce((s, e) => s + (e.words || countWords(e.body)), 0),
+      allWords: all.reduce((s, e) => s + (e.words || countWords(e.body)), 0),
+      summaryCount: all.length - real.length,
+      summaryWords: all.length - real.length
+        ? all.filter(isSummaryEntry).reduce((s, e) => s + (e.words || countWords(e.body)), 0)
+        : 0
+    };
+  }
+  function renderCounterPanel() {
+    const box = $("#counterResults");
+    if (!box) return;
+    const c = computeMessageCount();
+    box.innerHTML =
+      '<div class="cr-card cr-main"><span class="cr-num" id="crCount">' + c.realCount + '</span>' +
+        '<span class="cr-lbl">Messages counted</span>' +
+        '<span class="cr-sub">' + c.realWords.toLocaleString() + ' words written</span></div>' +
+      '<div class="cr-card cr-sum"><span class="cr-num" id="crSum">' + c.summaryCount + '</span>' +
+        '<span class="cr-lbl">Summaries counted</span>' +
+        '<span class="cr-sub">📌 FINAL SUMMARY · excluded from the message count (' +
+        c.summaryWords.toLocaleString() + ' words)</span></div>';
+    // keep the hero stat in sync with the SAME rule: messages only, never
+    // the 📌 FINAL SUMMARY entry.
+    const se = $("#statEntries");
+    if (se) se.textContent = c.realCount;
   }
 
   async function saveEntries(entries) {
@@ -396,13 +438,20 @@
   );
   $$(".reveal").forEach((el) => observer.observe(el));
 
-  // ---------- Live word count ----------
+  // ---------- Live ENTRY COUNT (message counter — NOT a word summary) ----------
+  // The screen under the editor shows ONLY the running count of entries:
+  // "N entries counted". It deliberately does NOT display a words/characters
+  // summary there. 🧮 Rule: the special "📌 FINAL SUMMARY" entry is NEVER part
+  // of this count — counting stops before the summary block; if you want the
+  // summary counted too, it continues on the OTHER side of the calculator
+  // (the 🧮 Message Counter panel's second card).
   const bodyInput = $("#entryBody");
   const liveCount = $("#liveCount");
-  bodyInput.addEventListener("input", () => {
-    liveCount.textContent =
-      countWords(bodyInput.value) + " words · " + bodyInput.value.length + " characters";
-  });
+  function updateLiveEntryCount() {
+    const typed = countWords(bodyInput.value) > 0 ? 1 : 0;   // what is being written right now
+    liveCount.textContent = (computeMessageCount().realCount + typed) + " entries counted";
+  }
+  bodyInput.addEventListener("input", updateLiveEntryCount);
 
   // ---------- Save entry ----------
   const form = $("#entryForm");
@@ -442,14 +491,14 @@
     // reset radio back to default (Deep) after form.reset()
     const defRadio = $('input[name="sender"][value="Deep"]');
     if (defRadio) defRadio.checked = true;
-    liveCount.textContent = "0 words · 0 characters";
+    updateLiveEntryCount();
     renderEntries();
     updateStats();
     showToast("Entry saved as a message from " + sender + " 🥛");
   });
 
   $("#clearBtn").addEventListener("click", () => {
-    setTimeout(() => { liveCount.textContent = "0 words · 0 characters"; }, 0);
+    setTimeout(updateLiveEntryCount, 0);
   });
 
   // ---------- Render entries ----------
@@ -467,12 +516,16 @@
   async function renderEntries() {
     await refreshFromCloud();
     const query = searchEl.value.trim().toLowerCase();
+    // 📂 CATEGORY FILTER: when a heading chip is selected, the preview shows
+    // ONLY the entries filed under that heading (search still applies on top).
     const entries = loadEntries().filter(
       (en) =>
-        !query ||
-        en.title.toLowerCase().includes(query) ||
-        en.body.toLowerCase().includes(query)
+        (!activeHeadingFilter || (en.heading || "(No heading)") === activeHeadingFilter) &&
+        (!query ||
+          en.title.toLowerCase().includes(query) ||
+          en.body.toLowerCase().includes(query))
     );
+    renderHeadingChips();
 
     listEl.innerHTML = "";
     emptyEl.style.display = entries.length ? "none" : "block";
@@ -487,18 +540,14 @@
     searchEl.disabled = !currentUser;
     $("#deleteAllBtn").disabled = !currentUser;
 
-    // ENTRY NUMBER on the cards too (1, 2, 3 … till the end): re-numbered in
-    // strict chronological order — the SAME numbering the booklet uses — so a
-    // card and its page in the book always wear the identical number. The
-    // number is display-only: it never enters the stored body or Supabase.
-    assignEntryNumbers(loadEntries());
+    // NO numbering on the cards (user rule) — counting lives only in the
+    // separate 🧮 Message Counter panel.
     entries.forEach((en) => {
       const article = document.createElement("article");
       article.className = "entry";
       const senderBadge = en.sender
         ? '<span class="sender-badge ' + (en.sender === "Deep" ? "badge-deep" : "badge-chota") + '">📨 ' + escapeHtml(en.sender) + "</span>"
         : "";
-      const noBadge = en.entryNo ? '<span class="entry-no">#' + en.entryNo + "</span>" : "";
       // COMPACT PREVIEW on the cards — FORMATTED, IDENTICAL TO THE BOOKLET:
       // the card body now runs through the EXACT same renderer the booklet
       // bubbles use (formatBookBodyHtml), so every entry — hand-written or
@@ -521,7 +570,7 @@
         .replace(/<\/span><\/span>/g, "</span></span>");
       article.innerHTML =
         "<header>" +
-          "<h3>" + noBadge + en.mood + " " + escapeHtml(en.title) + "</h3>" +
+          "<h3>" + en.mood + " " + escapeHtml(en.title) + "</h3>" +
           '<span class="date">' + formatDate(en.date) + "</span>" +
           senderBadge +
           (en.heading ? '<span class="heading-badge">📂 ' + escapeHtml(en.heading) + "</span>" : "") +
@@ -635,10 +684,53 @@
   async function updateStats() {
     await refreshFromCloud();
     const entries = loadEntries();
-    $("#statEntries").textContent = entries.length;
+    // 🧮 "Messages counted" EXCLUDES the 📌 FINAL SUMMARY entry — the summary
+    // is counted separately on the other side of the Message Counter panel.
+    const c = computeMessageCount();
+    $("#statEntries").textContent = c.realCount;
     $("#statWords").textContent = entries.reduce((sum, e) => sum + (e.words || countWords(e.body)), 0);
     $("#statStreak").textContent = computeStreak(entries);
+    renderCounterPanel();      // keep the separate counter in sync
+    updateLiveEntryCount();    // keep the editor's "N entries counted" in sync
+    renderHeadingChips();      // headings may appear/disappear with the entries
   }
+
+  // ---------- 📂 CATEGORY / HEADING FILTER ----------
+  // At the start of the entries section there is a row of category chips:
+  // one per heading present in the diary (+ All). The preview shows ONLY the
+  // entries matching the selected heading (search text still applies on top).
+  let activeHeadingFilter = "";   // "" = All categories
+  function headingCounts() {
+    const map = {};
+    loadEntries().forEach((en) => {
+      const h = en.heading || "(No heading)";
+      map[h] = (map[h] || 0) + 1;
+    });
+    return map;
+  }
+  function renderHeadingChips() {
+    const wrap = $("#headingChips");
+    if (!wrap) return;
+    const counts = headingCounts();
+    const keys = Object.keys(counts).sort((a, b) =>
+      a === "(No heading)" ? 1 : b === "(No heading)" ? -1 : a.localeCompare(b));
+    const total = loadEntries().length;
+    const chip = (label, value, n) =>
+      '<button type="button" class="h-chip' +
+      (activeHeadingFilter === value ? " active" : "") +
+      '" data-heading="' + escapeHtml(value) + '">' +
+      escapeHtml(label) + ' <span class="h-chip-n">' + n + "</span></button>";
+    wrap.innerHTML =
+      chip("🗂 All", "", total) +
+      keys.map((k) => chip(k, k, counts[k])).join("");
+  }
+  $("#headingChips").addEventListener("click", (e) => {
+    const btn = e.target.closest(".h-chip");
+    if (!btn) return;
+    activeHeadingFilter = btn.dataset.heading || "";
+    renderHeadingChips();
+    renderEntries();
+  });
 
   // ---------- Writing prompts ----------
   const prompts = [
@@ -1744,7 +1836,10 @@
     // number on every page, and the FIRST entry of a page can never wear a
     // different number from its siblings. Numbers are display-only and never
     // written to Supabase.
-    entries.forEach((en, i) => { en.entryNo = i + 1; });
+    // NO ENTRY NUMBERING inside the book (user rule): the diary shows the
+    // messages exactly as written — no "#N" badges anywhere. Counting lives
+    // only in the separate 🧮 Message Counter panel.
+    entries.forEach((en) => { delete en.entryNo; });
 
     // Page(s) 1..n: COVER — "The Day Our Story Began". The full cover text is
     // flowed through the SAME pagination engine as the entries, so nothing is
@@ -1786,9 +1881,8 @@
       // chronological numbering (the single source of truth), so the first
       // entry of a page is numbered exactly like all the others. Display-only:
       // it never touches the stored body or Supabase.
-      const noBadge = en.entryNo
-        ? "<span class='eb-no'>#" + en.entryNo + "</span>"
-        : "";
+      // NO ENTRY NUMBER badge in the book (user rule) — the numbered count
+      // lives only in the separate 🧮 Message Counter panel.
       return {
         kind: "para",
         // ONE message, fully together: the message text plus everything
@@ -1797,7 +1891,7 @@
         cls: isDeep ? "eb-deep" : "eb-chota",
         who: who,
         date: formatDate(en.date),
-        title: noBadge + "<strong>" + who + "</strong>",
+        title: "<strong>" + who + "</strong>",
         tag: en.sender ? "<span class='book-sender " + (isDeep ? "bs-deep" : "bs-chota") + "'>📨 " + who + "</span>" : ""
       };
     };
