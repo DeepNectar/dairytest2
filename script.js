@@ -3944,81 +3944,34 @@
        bound at the TOP edge — when a sheet is lifted it rotates UPWARD and
        its BACK side faces the reader mid-flight. Real flip-books print on
        one side of each sheet only, so the back of every leaf is deliberately
-       kept BLANK plain paper here: no page content and no page number are
-       ever painted onto the back face (mirrored text / reversed numbers can
-       not appear even for a single frame). backHTML/backNum stay in the
-       signature for compatibility but are intentionally never rendered. */
+       kept completely EMPTY (plain paper): no page content, no header, no
+       footer and no page number are ever painted onto the back face
+       (mirrored text / reversed numbers can not appear even for a single
+       frame). backHTML/backNum stay in the signature for compatibility but
+       are intentionally never rendered. */
     fp.querySelector(".page-content").innerHTML = frontHTML;
-    bp.querySelector(".page-content").innerHTML = "";
+    bp.innerHTML = "";   // back face = guaranteed blank paper
     addStickersToPage(fp.querySelector(".page-content"), "LF" + frontNum);
     fp.querySelector(".page-num").textContent = frontNum;
-    bp.querySelector(".page-num").textContent = "";
   }
 
   function flipPage(dir) {
     if (flipping) return;
 
-    // ---- PHONE MODE: one PAGE per screen, upward note-style page flip ----
-    // Every numbered page (1, 2, 3 … to the end) is its own screen. Turning
-    // a page lifts the current sheet from the BOTTOM edge and rotates it
-    // UPWARD like flipping a sticky-note pad: Next flips the sheet up and
-    // away revealing the following page; Prev brings the previous page back
-    // down into view. Purely visual — the pagination engine, page numbers,
-    // ruled geometry and the printed booklet are untouched.
+    // ---- PHONE MODE: NOT A BOOK — PLAIN SINGLE-PAGE SWAP ----
+    // On phones every numbered page (1, 2, 3 … to the end) is its own
+    // full-screen sheet and turning a page simply REPLACES it with the next
+    // / previous one. No leaf, no ghost clone, no 3D upward rotation — the
+    // book/flip mechanics are desktop-only. Swipe, tap and the Prev/Next
+    // tabs all route through here; everything else (pagination, numbering,
+    // save/print) behaves exactly as before.
     if (isPhoneBook()) {
-      const totalPages = Math.max(1, bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1) + 1);
+      const lastIdx = bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1);
+      const totalPages = Math.max(1, lastIdx + 1);   // pages 1..N on phones
       if (dir === "next" && spread >= totalPages - 1) return;
       if (dir === "prev" && spread <= 0) return;
-      flipping = true;
-      const bookEl = $("#book");
-      const stageEl = bookEl.parentElement;    // .book-stage (carries perspective)
-      const cls = dir === "next" ? "phone-flip-up" : "phone-flip-down";
-
-      /* FRONT SIDE ONLY: capture the CURRENTLY visible sheet as a standalone
-         clone and animate just that one face upward like a sticky-note pad.
-         The old static sheet is hidden for the duration, so the back side of
-         the leaf NEVER shows — no mirrored text, no reversed page numbers.
-         When the animation ends the clone is removed and the real (already
-         re-rendered) page takes its place. */
-      const liveSheet = bookEl.querySelector(".page-left");
-      let ghost = null;
-      if (liveSheet && stageEl) {
-        ghost = liveSheet.cloneNode(true);
-        ghost.id = "";                          // avoid duplicate ids
-        ghost.querySelectorAll("[id]").forEach(n => { n.removeAttribute("id"); });
-        ghost.classList.add("phone-ghost");
-        // pin it exactly over the current sheet, at the same zoom scale
-        ghost.style.left = "0px";
-        ghost.style.top = "0px";
-        ghost.style.width = "var(--a4w)";
-        ghost.style.height = "var(--a4h)";
-        ghost.style.zoom = getComputedStyle(bookEl).zoom || "1";
-        stageEl.appendChild(ghost);
-        bookEl.classList.add("phone-sheet-hidden");
-      }
-
-      const finish = () => {
-        if (ghost && ghost.parentElement) ghost.parentElement.removeChild(ghost);
-        bookEl.classList.remove("phone-sheet-hidden");
-        flipping = false;
-      };
-      if (ghost) {
-        ghost.addEventListener("animationend", finish, { once: true });
-        // safety net in case the animation event never fires (reduced motion etc.)
-        setTimeout(finish, 950);
-      } else {
-        setTimeout(finish, 600);
-      }
-
-      // start the flight instantly — the ghost IS the current page
-      void (ghost || bookEl).offsetWidth;      // force layout before animating
-      if (ghost) ghost.classList.add(cls);
-
-      setTimeout(() => {
-        // mid-flight: rebuild the REAL sheet underneath with the next/prev page
-        if (dir === "next") spread += 1; else spread -= 1;
-        renderSpread();
-      }, 300);
+      spread += dir === "next" ? 1 : -1;
+      renderSpread();
       return;
     }
 
@@ -4172,16 +4125,19 @@
     if (e.key === "Escape") closeBook();
   });
 
-  // ---- PHONE: swipe left/right on the sheet to turn pages, OR simply tap
-  // it (notes-style reader — every screen is one page). Horizontal swipes
-  // still work and are guarded so a swipe never turns TWO pages. Registered
+  // ---- PHONE: PORTRAIT UP/DOWN SWIPE on the single sheet + plain TAP to
+  // advance (notes-style reader — every screen is ONE page, front side only,
+  // no book/flip mechanics at all). Swipe UP = next page, swipe DOWN =
+  // previous page; clear horizontal drags are ignored so they never turn a
+  // page by accident. A swipe timestamp guards the synthetic click that
+  // follows touchend, so one gesture never advances TWO pages. Registered
   // with passive:true so the browser never blocks scrolling while we observe.
   let lastSwipeAt = 0;
   (function attachBookSwipe() {
     const stage = document.querySelector("#bookModal .book-stage");
     if (!stage) return;
     let sx = 0, sy = 0, tracking = false;
-    const SWIPE_MIN_X = 45;                 // horizontal distance to count as a swipe
+    const SWIPE_MIN_Y = 60;                 // vertical distance to count as a swipe
     stage.addEventListener("touchstart", (e) => {
       if (e.touches.length !== 1) { tracking = false; return; }
       tracking = true;
@@ -4192,16 +4148,16 @@
       tracking = false;
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
-      // must be a clear horizontal drag, not a tap and not a vertical scroll
-      if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      // must be a clear VERTICAL drag, not a tap and not a horizontal scroll
+      if (Math.abs(dy) < SWIPE_MIN_Y || Math.abs(dy) < Math.abs(dx) * 1.2) return;
       // mark the swipe so the follow-up click never turns an extra page
       lastSwipeAt = Date.now();
-      flipPage(dx < 0 ? "next" : "prev");
+      flipPage(dy < 0 ? "next" : "prev");   // portrait: up = forward, down = back
     }, { passive: true });
     stage.addEventListener("touchmove", (e) => {
-      // once the finger clearly goes vertical, stop treating it as a swipe
+      // once the finger clearly goes horizontal, stop treating it as a swipe
       if (tracking && e.touches.length === 1 &&
-          Math.abs(e.touches[0].clientY - sy) > Math.abs(e.touches[0].clientX - sx) * 1.5) {
+          Math.abs(e.touches[0].clientX - sx) > Math.abs(e.touches[0].clientY - sy) * 1.5) {
         tracking = false;
       }
     }, { passive: true });

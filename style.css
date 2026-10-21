@@ -980,14 +980,17 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   pointer-events: none;
 }
 
-/* ---- Flipping leaf — PORTRAIT NOTE-STYLE BOOK, FLIPS UPWARD ----
-   The diary is a portrait pad bound at the TOP edge (like an accounting
-   book / sticky-note pad): turning a page LIFTS THE SHEET FROM ITS BOTTOM
-   EDGE and rotates it UPWARD around the top hinge. Writing lives ONLY on
-   the FRONT face of every sheet — the back of a lifted sheet is deliberately
-   PLAIN PAPER (see .leaf-back below), never mirrored text or reversed page
-   numbers. Both faces are locked with backface-visibility:hidden so during
-   the upward rotation only the correct face is ever visible. */
+/* ---- Flipping leaf — DESKTOP TWO-PAGE SPREAD ONLY, FLIPS UPWARD ----
+   On large screens the diary shows a two-page spread bound at the TOP edge
+   (like an accounting ledger): turning a page LIFTS THE SHEET FROM ITS
+   BOTTOM EDGE and rotates it UPWARD around the top hinge. Writing lives
+   ONLY on the FRONT face of every sheet — the back of a lifted sheet is
+   deliberately PLAIN PAPER (see .leaf-back below), never mirrored text or
+   reversed page numbers. Both faces are locked with
+   backface-visibility:hidden so during the upward rotation only the correct
+   face is ever visible.
+   ON PHONES (.book-phone-mode) this leaf NEVER participates: the phone view
+   is plain SINGLE-PAGE navigation (no book / flip mechanics at all). */
 .leaf {
   position: absolute;
   top: 0;
@@ -1007,14 +1010,19 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
 @keyframes flipUp   { from { transform: rotateX(0deg); }    to { transform: rotateX(-178deg); } }
 @keyframes flipDown { from { transform: rotateX(-178deg); } to { transform: rotateX(0deg); } }
 /* WRITING ON THE FRONT SIDE ONLY: the back face of a sheet is BLANK paper —
-   no header title, no entry text, no footer stamp, no page number can ever
-   show through while the sheet is mid-flight upward. */
+   in the HTML it contains NO header, NO page content and NO footer at all,
+   so no entry text, title, stamp or page number can ever appear on the
+   reverse side, not even for a single frame mid-flight. These rules simply
+   paint that empty face as plain warm paper with a soft inner shade. */
 .leaf-back {
   background-image: linear-gradient(180deg, #f7f2e6, #efe7d6) !important;
   box-shadow: inset 0 0 46px rgba(120, 90, 40, .12);
 }
+/* (legacy guards kept harmless: if any old markup ever nests chrome inside
+   the back face, hide it — entries must stay front-side-only) */
 .leaf-back > .book-page-header,
-.leaf-back > .book-page-footer { visibility: hidden; }
+.leaf-back > .book-page-footer,
+.leaf-back > .page-content { display: none !important; }
 
 .leaf-face {
   position: absolute;
@@ -1317,16 +1325,18 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
 @media (max-width: 820px) { .header-doc-link { display: none; } }
 
 /* ============================================================================
-   PHONE MODE — the book view is a 100% full-screen APP on phones:
+   PHONE MODE — the book view on phones is NOT a flip-book at all:
+   it is a plain SINGLE-PAGE reader. Every numbered page (1, 2, 3 …) gets
+   its own full-screen sheet and pages turn by simple SWIPE / TAP / TABS —
+   no 3D leaf, no ghost clone, no upward rotation (that was what looked
+   broken on phones). The desktop two-page spread keeps its flip-up book.
    • top app bar (back ‹ · title · save 📌 · print 🖨️) replaces the modal
-     title/close button, bottom tab bar (‹ Prev · Page x/y · Save · Print · Next ›)
-     replaces the desktop control row — both live inside .book-wrap so the
-     sheet-fitting maths below stays exact.
+     title/close button, bottom tab bar (‹ Prev · Page x/y · Save · Print ·
+     Next ›) replaces the desktop control row — both live inside .book-wrap
+     so the sheet-fitting maths below stays exact.
    • ONE A4 SHEET at a time (never the two-page spread), fitted to the screen
      with a uniform `zoom` (--book-zoom from fitBookZoom()) so the standard
      geometry (794px wide, 24px rows) and the printed booklet stay untouched.
-   • Pages turn ONLY by swiping left/right on the sheet (a plain tap does
-     nothing; even the Prev/Next tabs are hidden — swipe-only navigation).
    ==========================================================================*/
 @media (max-width: 820px) {
   /* the book modal becomes a full-screen "app page" on phones */
@@ -1398,64 +1408,23 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   body.book-phone-mode .book { width: var(--a4w); }
   /* no spine down the middle of a single sheet */
   body.book-phone-mode .book-spine { display: none; }
-  /* the leaf animation anchors to the single sheet — and on phones even the
-     generic leaf flips UPWARD around the TOP edge (portrait note pad): the
-     whole book is a top-bound flip-up diary on every device, never a
-     side-bound book that flips horizontally */
-  body.book-phone-mode .leaf.flipping-forward { left: 0; }
-  body.book-phone-mode .leaf.flipping-back    { transform-origin: center top; }
+  /* NO FLIP-BOOK ON PHONES — plain single-page reader:
+     the two-sided flipping leaf and every page-turn animation are fully
+     disabled inside the phone mode. Pages simply SWAP (no 3D rotation, no
+     ghost clone, no upward sheet), which is exactly what was requested. */
+  body.book-phone-mode .leaf { display: none !important; }
+  body.book-phone-mode .leaf.flipping-forward,
+  body.book-phone-mode .leaf.flipping-back { animation: none !important; display: none !important; }
+  /* belt & braces: any leftover ghost/hidden classes from older code paths
+     can never affect the plain phone view */
+  .phone-ghost { display: none !important; }
+  .book.phone-sheet-hidden { visibility: visible !important; }
 
-  /* ---- PHONE UPWARD NOTE-FLIP — FRONT SIDE ONLY ----
-     The page that is being turned away is a standalone clone of the CURRENT
-     sheet (the ghost). Only its FRONT face exists and animates — there is no
-     second face, so mirrored/back-side entries can NEVER flash during the
-     flip. It hinges on the TOP edge and rotates upward like a sticky-note pad. */
-  .book-stage { position: relative; }          /* anchor point for the ghost */
-  .phone-ghost {
-    position: absolute;
-    z-index: 30;
-    pointer-events: none;
-    margin: 0;
-    cursor: default;
-    transform-origin: center top;              /* hinge = top edge */
-    backface-visibility: hidden;               /* belt & braces: no back side */
-    will-change: transform;
-    box-shadow: 0 18px 40px rgba(60, 40, 10, .28);
-    border-radius: 6px;
-  }
-  .phone-ghost.phone-flip-up {
-    animation: phoneFlipUp .6s cubic-bezier(.35, .05, .35, 1) forwards;
-  }
-  .phone-ghost.phone-flip-down {
-    animation: phoneFlipDown .6s cubic-bezier(.35, .05, .35, 1) forwards;
-  }
-  @keyframes phoneFlipUp {
-    from { transform: rotateX(0deg); opacity: 1; }
-    70%  { opacity: 1; }
-    to   { transform: rotateX(-92deg) translateY(-6px); opacity: .18; }
-  }
-  @keyframes phoneFlipDown {
-    from { transform: rotateX(-92deg) translateY(-6px); opacity: .18; }
-    30%  { opacity: 1; }
-    to   { transform: rotateX(0deg); opacity: 1; }
-  }
-  /* while the ghost flies, the real book underneath stays hidden so nothing
-     of the old spread (or any leaf back face) peeks through */
-  .book.phone-sheet-hidden { visibility: hidden; }
-  /* honour reduced-motion: no rotation, just a quick fade swap */
-  @media (prefers-reduced-motion: reduce) {
-    .phone-ghost.phone-flip-up, .phone-ghost.phone-flip-down {
-      animation: phoneFade .3s ease forwards;
-    }
-    @keyframes phoneFade { from { opacity: 1; } to { opacity: 0; } }
-  }
+  /* tap-to-advance affordance on the sheet (a plain reader gesture) */
+  body.book-phone-mode .page { cursor: pointer; }
 
-  /* swipe-only: kill the desktop "click the page to flip" affordance */
-  body.book-phone-mode .page { cursor: default; }
-
-  /* SWIPE-ONLY NAVIGATION (per requirement): hide the Prev/Next tabs — the
-     middle Save / Print cluster centres itself automatically */
-  #tabPrev, #tabNext { display: none; }
+  /* Prev / Next tabs ARE shown on phones — simple buttons alongside swipe
+     and tap navigation (nothing hidden, nothing book-like) */
 
   /* desktop controls hidden on phones (the app bars replace them) */
   .desktop-only-controls { display: none; }
