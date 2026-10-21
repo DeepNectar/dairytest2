@@ -36,6 +36,7 @@
       <a href="#contact">Contact</a>
     </nav>
     <div class="nav-actions">
+      <button id="installBtn" class="btn btn-install btn-sm hidden" title="Install DairyWriting as an app on your phone or desktop">⬇️&nbsp;<span class="btn-txt-long">Install App</span></button>
       <button id="authBtn" class="btn btn-primary btn-sm">Sign In</button>
       <button id="userChip" class="user-chip hidden" title="Account menu">
         <span class="avatar" id="userAvatar">?</span><span id="userName"></span> ▾
@@ -65,7 +66,10 @@
         <a href="#about" class="btn btn-ghost">Learn More</a>
       </div>
       <div class="stats">
-        <div class="stat"><strong id="statEntries">0</strong><span>Entries</span></div>
+        <!-- 🧮 MESSAGE COUNTER: counts the MESSAGES only (one saved entry = one
+             message). It is a separate counter — it never prints an "entry #N"
+             number inside the diary book or on the cards. -->
+        <div class="stat" title="Separate counter — counts your messages only; no numbering appears in the book"><strong id="statEntries">0</strong><span>Messages counted</span></div>
         <div class="stat"><strong id="statWords">0</strong><span>Words written</span></div>
         <div class="stat"><strong id="statStreak">0</strong><span>Day streak</span></div>
       </div>
@@ -165,7 +169,7 @@ A normal day that became precious because she was in it. Morning greetings,
 busy afternoons, her dreams and my waiting — every line pulled us closer.
 
 ========================================</pre>
-      <p class="template-note"><strong>Entry numbers:</strong> every <code>- Message: [date]</code> line may start with a running number — <code>#1 - Message: …</code>, <code>1. - Message: …</code> or <code>(1) - Message: …</code> — counted <strong>1, 2, 3 … till the end</strong> across all headings and days. Only the <code>Message: [12 January 2026, 08:15 AM] …</code> lines are counted; the <code>What I felt:</code> / <code>Note:</code> lines belong to the message above them and never get their own number. The number is just a label for checking big sheets — it is stripped before import and never stored in Supabase.<br /><strong>All 15 headings are supported.</strong> Use only the heading sections that have content — messages under each <code>####</code> heading are automatically filed there. Skip the headings and they'll still be auto-detected from keywords. The <code>📌 FINAL SUMMARY</code> block is saved as its own summary page in the booklet.</p>
+      <p class="template-note"><strong>🧮 Entry counting (separate counter):</strong> the app counts your messages in its own counter — the hero stat <em>“Messages counted”</em> and the live <em>“N messages counted”</em> chip under the editor. Numbering is NOT part of the diary: you may write <code>#1 - Message: …</code>, <code>1. - Message: …</code> or <code>(1) - Message: …</code> on big sheets, but those numbers are stripped before import and <strong>never appear inside the book, on the cards, or in Supabase</strong>. Only the <code>Message: [12 January 2026, 08:15 AM] …</code> lines are counted as entries; the <code>What I felt:</code> / <code>Note:</code> lines belong to the message above them and never get their own number.<br /><strong>All 15 headings are supported.</strong> Use only the heading sections that have content — messages under each <code>####</code> heading are automatically filed there. Skip the headings and they'll still be auto-detected from keywords. The <code>📌 FINAL SUMMARY</code> block is saved as its own summary page in the booklet.</p>
       <button class="btn btn-ghost btn-sm" id="copyTemplateBtn" type="button">📋 Copy Template</button>
     </div>
 
@@ -379,6 +383,7 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
       <!-- ===== Phone app bottom tab bar (visible only in phone mode) ===== -->
       <nav class="app-tabbar" id="appTabbar">
         <button class="app-tab" id="tabPrev" type="button"><span class="app-tab-ic">‹</span><span class="app-tab-lbl">Prev</span></button>
+        <button class="app-tab" id="tabInstall" type="button" title="Install this app on your device"><span class="app-tab-ic">⬇️</span><span class="app-tab-lbl">Install</span></button>
         <span class="app-tab-page" id="spreadInfoPhone">Page 1 / 1</span>
         <button class="app-tab" id="tabSave" type="button"><span class="app-tab-ic">📌</span><span class="app-tab-lbl">Save</span></button>
         <button class="app-tab" id="tabPrint" type="button"><span class="app-tab-ic">🖨️</span><span class="app-tab-lbl">Print</span></button>
@@ -392,5 +397,95 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="script.js"></script>
+  <!-- PWA: register the offline service worker + wire up the Install App button.
+       Kept inline so it runs even if script.js is still loading. -->
+  <script>
+    (function () {
+      // --- Service worker (enables installability on Chromium browsers) ---
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("sw.js").catch(function (err) {
+            console.warn("SW registration failed:", err);
+          });
+        });
+      }
+
+      var installBtn = document.getElementById("installBtn");
+      var tabInstall = document.getElementById("tabInstall");
+      var deferredPrompt = null;
+      var iOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      var isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+
+      function setLabel(btn, txt) {
+        if (!btn) return;
+        var span = btn.querySelector(".btn-txt-long");
+        if (span) { span.textContent = txt.replace(/^[^\w]*\s*/, ""); }
+        else { btn.textContent = txt; }
+      }
+
+      // Already installed → nothing to do, hide the buttons.
+      if (isStandalone) {
+        if (installBtn) installBtn.classList.add("hidden");
+        if (tabInstall) tabInstall.classList.add("hidden");
+      }
+
+      // Android / desktop (Chromium): capture the native install prompt.
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn) { installBtn.classList.remove("hidden"); setLabel(installBtn, "⬇️ Install App"); }
+        if (tabInstall) { tabInstall.classList.remove("hidden"); }
+      });
+
+      window.addEventListener("appinstalled", function () {
+        deferredPrompt = null;
+        if (installBtn) installBtn.classList.add("hidden");
+        if (tabInstall) tabInstall.classList.add("hidden");
+        var t = document.getElementById("toast");
+        if (t) { t.textContent = "✅ App installed — look for DairyWriting on your home screen!"; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 2600); }
+      });
+
+      function showToastMsg(msg) {
+        var t = document.getElementById("toast");
+        if (!t) return;
+        t.textContent = msg; t.classList.add("show");
+        clearTimeout(t._dwTimer);
+        t._dwTimer = setTimeout(function () { t.classList.remove("show"); }, 3200);
+      }
+
+      function doInstall(btn) {
+        if (deferredPrompt) {                       // Android / desktop flow
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function (res) {
+            if (res.outcome === "accepted") {
+              setLabel(btn, "✅ Installing…");
+            } else {
+              showToastMsg("Install dismissed — you can try again anytime 🙂");
+            }
+            deferredPrompt = null;
+          });
+        } else if (iOS && !isStandalone) {          // iOS Safari manual flow
+          showToastMsg("📲 To install on iPhone/iPad: tap the Share button ⎋ then “Add to Home Screen”.");
+        } else {
+          showToastMsg("ℹ️ Use your browser menu → “Install app / Add to Home Screen”.");
+        }
+      }
+
+      if (installBtn) {
+        // On iOS there is no beforeinstallprompt — show the button anyway with
+        // the Share → Add to Home Screen guidance.
+        if (iOS && !isStandalone) {
+          installBtn.classList.remove("hidden");
+          setLabel(installBtn, "⬇️ Install App");
+        }
+        installBtn.addEventListener("click", function () { doInstall(installBtn); });
+      }
+      if (tabInstall) {
+        if (iOS && !isStandalone) tabInstall.classList.remove("hidden");
+        tabInstall.addEventListener("click", function () { doInstall(tabInstall); });
+      }
+    })();
+  </script>
 </body>
 </html>
