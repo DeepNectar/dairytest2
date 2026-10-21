@@ -409,6 +409,21 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
   }
+  // Exposed so app-install.js can celebrate a successful install with the
+  // same toast style (harmless no-op if it loads first — guarded there).
+  window.showToast = showToast;
+
+  // ---------- iOS "proper app" polish ----------
+  // On iPhone/iPad, WebKit fires a fake focus/scroll event when a button is
+  // tapped inside inputs/forms, which can leave the page shifted up behind
+  // the keyboard. Restoring the scroll position right after blur fixes it so
+  // everything stays visible properly in the installed home-screen app too.
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    document.addEventListener("focusout", () => {
+      setTimeout(() => window.scrollTo(0, 0), 60);
+    }, { capture: true });
+  }
 
   // ---------- Theme toggle (cloud-synced per account) ----------
   const themeBtn = $("#themeToggle");
@@ -447,6 +462,17 @@
   });
   navLinks.addEventListener("click", (e) => {
     if (e.target.tagName === "A") {
+      hamburger.classList.remove("open");
+      navLinks.classList.remove("open");
+    }
+  });
+
+  // Close the phone drop-down menu when tapping anywhere outside it —
+  // proper app behaviour on iOS/Android touch screens.
+  document.addEventListener("click", (e) => {
+    if (!navLinks || !hamburger) return;
+    if (navLinks.classList.contains("open") &&
+        !navLinks.contains(e.target) && !hamburger.contains(e.target)) {
       hamburger.classList.remove("open");
       navLinks.classList.remove("open");
     }
@@ -4113,6 +4139,15 @@
   // listeners needed; the layout never switches between modes.)
 
   $("#bookViewLink").addEventListener("click", (e) => { e.preventDefault(); openBook(); });
+
+  // Deep link from the installed app's shortcuts (manifest "Book" shortcut
+  // opens index.html?view=book) — auto-open the book once everything loaded.
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get("view") === "book") {
+      setTimeout(() => openBook(), 900);
+    }
+  } catch (e) { /* older browsers — plain site behaviour */ }
   $("#bookClose").addEventListener("click", closeBook);
   // Phone app bars: back button closes, save/print mirror the desktop buttons
   const appBack = $("#appBackBtn"); if (appBack) appBack.addEventListener("click", closeBook);

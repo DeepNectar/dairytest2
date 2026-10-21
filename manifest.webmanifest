@@ -1,0 +1,35 @@
+{
+  "name": "Dairy Writing — Daily Journal",
+  "short_name": "Dairy Writing",
+  "description": "A cozy daily writing journal. Write, save and reflect on your entries — synced in the cloud, works like a native app on iOS and Android.",
+  "id": "/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6efe4",
+  "theme_color": "#b3456b",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["lifestyle", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Write today's entry",
+      "short_name": "Write",
+      "url": "./index.html#journal",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Open book view",
+      "short_name": "Book",
+      "url": "./index.html?view=book",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
