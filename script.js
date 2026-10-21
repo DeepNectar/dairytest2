@@ -3964,18 +3964,54 @@
       if (dir === "prev" && spread <= 0) return;
       flipping = true;
       const bookEl = $("#book");
+      const stageEl = bookEl.parentElement;    // .book-stage (carries perspective)
       const cls = dir === "next" ? "phone-flip-up" : "phone-flip-down";
-      bookEl.classList.remove("phone-flip-up", "phone-flip-down");
-      void bookEl.offsetWidth;                 // restart the CSS animation
-      bookEl.classList.add(cls);
+
+      /* FRONT SIDE ONLY: capture the CURRENTLY visible sheet as a standalone
+         clone and animate just that one face upward like a sticky-note pad.
+         The old static sheet is hidden for the duration, so the back side of
+         the leaf NEVER shows — no mirrored text, no reversed page numbers.
+         When the animation ends the clone is removed and the real (already
+         re-rendered) page takes its place. */
+      const liveSheet = bookEl.querySelector(".page-left");
+      let ghost = null;
+      if (liveSheet && stageEl) {
+        ghost = liveSheet.cloneNode(true);
+        ghost.id = "";                          // avoid duplicate ids
+        ghost.querySelectorAll("[id]").forEach(n => { n.removeAttribute("id"); });
+        ghost.classList.add("phone-ghost");
+        // pin it exactly over the current sheet, at the same zoom scale
+        ghost.style.left = "0px";
+        ghost.style.top = "0px";
+        ghost.style.width = "var(--a4w)";
+        ghost.style.height = "var(--a4h)";
+        ghost.style.zoom = getComputedStyle(bookEl).zoom || "1";
+        stageEl.appendChild(ghost);
+        bookEl.classList.add("phone-sheet-hidden");
+      }
+
+      const finish = () => {
+        if (ghost && ghost.parentElement) ghost.parentElement.removeChild(ghost);
+        bookEl.classList.remove("phone-sheet-hidden");
+        flipping = false;
+      };
+      if (ghost) {
+        ghost.addEventListener("animationend", finish, { once: true });
+        // safety net in case the animation event never fires (reduced motion etc.)
+        setTimeout(finish, 950);
+      } else {
+        setTimeout(finish, 600);
+      }
+
+      // start the flight instantly — the ghost IS the current page
+      void (ghost || bookEl).offsetWidth;      // force layout before animating
+      if (ghost) ghost.classList.add(cls);
+
       setTimeout(() => {
+        // mid-flight: rebuild the REAL sheet underneath with the next/prev page
         if (dir === "next") spread += 1; else spread -= 1;
         renderSpread();
-      }, 280);                                 // swap content mid-flight
-      setTimeout(() => {
-        bookEl.classList.remove(cls);
-        flipping = false;
-      }, 580);
+      }, 300);
       return;
     }
 
