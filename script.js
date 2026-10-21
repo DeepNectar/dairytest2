@@ -325,6 +325,7 @@
     try {
       await syncDelete("entries", "id=eq." + id + "&owner=eq." + encodeURIComponent(currentUser.toLowerCase()));
       entriesCache = entriesCache.filter((en) => Number(en.id) !== Number(id));
+      invalidateMessageCount(); // counts changed — drop the memo
       return true;
     } catch (e) {
       console.warn("sync: cloud delete failed", e);
@@ -339,6 +340,7 @@
     try {
       await syncDelete("entries", "owner=eq." + encodeURIComponent(currentUser.toLowerCase()));
       entriesCache = [];
+      invalidateMessageCount(); // counts changed — drop the memo
       return true;
     } catch (e) {
       console.warn("sync: cloud delete-all failed", e);
@@ -479,16 +481,39 @@
   });
 
   // ---------- Active nav link on scroll ----------
+  // PERFORMANCE FIX: the old handler ran synchronously on EVERY scroll event,
+  // and each run read `sec.offsetTop` for all sections — a forced layout
+  // ("layout thrashing") that blocks the main thread while the user scrolls.
+  // On long diaries this is what made the page feel stuck/janky during scroll.
+  // Now the work is coalesced into ONE rAF callback per frame, and section
+  // offsets are cached (they only change when the layout changes — fonts,
+  // resize or new entries), so scrolling reads no layout at all.
   const sections = $$("section[id]");
-  window.addEventListener("scroll", () => {
+  let sectionTops = [];
+  function measureSectionTops() {
+    sectionTops = sections.map((sec) => ({ id: sec.id, top: sec.offsetTop }));
+  }
+  let navRaf = null;
+  function updateActiveNav() {
+    navRaf = null;
+    if (!sectionTops.length) measureSectionTops();
+    const y = window.scrollY;
     let current = "home";
-    sections.forEach((sec) => {
-      if (window.scrollY >= sec.offsetTop - 120) current = sec.id;
-    });
+    for (let i = 0; i < sectionTops.length; i++) {
+      if (y >= sectionTops[i].top - 120) current = sectionTops[i].id;
+    }
     $$(".nav-links a").forEach((a) => {
       a.classList.toggle("active", a.getAttribute("href") === "#" + current);
     });
-  });
+  }
+  window.addEventListener("scroll", () => {
+    if (navRaf === null) navRaf = requestAnimationFrame(updateActiveNav);
+  }, { passive: true });
+  window.addEventListener("resize", () => { measureSectionTops(); }, { passive: true });
+  measureSectionTops();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(measureSectionTops).catch(() => {});
+  }
 
   // ---------- Scroll reveal ----------
   const observer = new IntersectionObserver(
@@ -513,6 +538,26 @@
   // (the 🧮 Message Counter panel's second card).
   const bodyInput = $("#entryBody");
   const liveCount = $("#liveCount");
+
+  // PERFORMANCE FIX (typing lag): computeMessageCount() walks EVERY stored
+  // entry and re-counts words with the heavy regex-based countWords() whenever
+  // an entry has no cached `words` field. Previously this ran FULLY on every
+  // single keystroke in the editor (and again inside updateStats), which made
+  // typing stutter and the page feel stuck on big diaries. Now:
+  //   • the diary-wide totals are memoised per cache-instance (entries are
+  //     immutable objects swapped wholesale on save, so identity is a safe key)
+  //   • the expensive recount only runs when the cache actually changed;
+  //     while typing, only the cheap draft count is redone each keystroke.
+  let mcCacheKey = null;
+  let mcCached = null;
+  function computeMessageCountMemo() {
+    if (mcCached && mcCacheKey === entriesCache) return mcCached;
+    mcCached = computeMessageCount();
+    mcCacheKey = entriesCache;
+    return mcCached;
+  }
+  function invalidateMessageCount() { mcCacheKey = null; mcCached = null; }
+
   function updateLiveEntryCount() {
     const typedWords = countWords(bodyInput.value);              // words being written right now
     const typed = typedWords > 0 ? 1 : 0;                        // the draft counts as one live entry
@@ -520,11 +565,17 @@
     // entry onward — same rule as the message count. If you want the summary
     // counted too, it continues on the OTHER side of the calculator (the
     // 🧮 Message Counter panel's second card), never in this line.
-    const c = computeMessageCount();
+    const c = computeMessageCountMemo();
     liveCount.textContent = (c.realCount + typed) + " entries counted, " +
       (c.realWords + typedWords).toLocaleString() + " words written";
   }
-  bodyInput.addEventListener("input", updateLiveEntryCount);
+  // PERFORMANCE FIX: keystroke work is coalesced into one rAF callback per
+  // frame instead of running the full count synchronously on every input event.
+  let liveRaf = null;
+  bodyInput.addEventListener("input", () => {
+    if (liveRaf !== null) return;
+    liveRaf = requestAnimationFrame(() => { liveRaf = null; updateLiveEntryCount(); });
+  });
 
 
   // ---------- Save entry ----------
@@ -612,8 +663,15 @@
   // Re-read the diary straight from the cloud so every device shows the same,
   // freshest data (this is what "sync" means here — no local copies).
   async function refreshFromCloud() {
-    if (!currentUser) { entriesCache = []; return; }
+    if (!currentUser) { entriesCache = []; invalidateMessageCount(); return; }
+    const prevLen = entriesCache.length;
     entriesCache = await loadEntriesFromCloud(currentUser);
+    // PERFORMANCE FIX: a freshly loaded list carries brand-new object
+    // identities, so the memoised counts must be dropped whenever anything
+    // actually changed (old or new list non-empty). A sign-in that loads an
+    // empty diary onto an already-empty cache keeps the (identical, zero)
+    // memo — nothing else ever mutates entry objects in place.
+    if (prevLen || entriesCache.length) invalidateMessageCount();
   }
 
   async function renderEntries() {
@@ -630,7 +688,56 @@
     );
     renderHeadingChips();
 
-    listEl.innerHTML = "";
+    paintEntryCards(entries);
+  }
+
+  // PERFORMANCE FIX: the card painting was extracted from renderEntries() so
+  // the search box can re-paint instantly from the in-memory cache without a
+  // cloud round-trip. Also, previously every article was appended one by one
+  // (a DOM insertion + style recalc per entry); now the whole list is built
+  // as ONE html string and assigned in a single write — one layout pass for
+  // the entire list instead of N.
+  function buildEntryCardHtml(en) {
+    const senderBadge = en.sender
+      ? '<span class="sender-badge ' + (en.sender === "Deep" ? "badge-deep" : "badge-chota") + '">📨 ' + escapeHtml(en.sender) + "</span>"
+      : "";
+    // COMPACT PREVIEW on the cards — FORMATTED, IDENTICAL TO THE BOOKLET:
+    // the card body now runs through the EXACT same renderer the booklet
+    // bubbles use (formatBookBodyHtml), so every entry — hand-written or
+    // legacy-imported, first on the page or last — is formatted the same
+    // way: the message line plus a styled 💭 "How I felt:" / 📝 "Note:"
+    // block. The old path double-scrubbed the renderer's own markup with
+    // finalScrub(), which glued the felt note onto the message and left
+    // &quot; entities visible — the raw-HTML look some entries still had.
+    // Now only CONTENT units are scrubbed (inside formatBookBodyHtml),
+    // never the presentation markup, and the card simply re-emits that
+    // markup with its own CSS classes below.
+    const previewBodyHtml = formatBookBodyHtml(en.body, en.sender);
+    // Turn the bubble HTML into card-safe markup: <span class="eb-extra">
+    // becomes a block-level .felt line (a <span> inside the pre-wrap <p>
+    // would not break onto its own row), the eb-label keeps its styling.
+    // Nothing else in the string can contain markup (every content unit was
+    // finalScrub()-flattened + escapeHtml()-escaped by the renderer).
+    const previewBody = previewBodyHtml
+      .replace(/<span class="eb-extra"><span class="eb-label">/g, '<br><span class="felt"><span class="eb-label">')
+      .replace(/<\/span><\/span>/g, "</span></span>");
+    return (
+      "<article class=\"entry\">" +
+        "<header>" +
+          "<h3>" + en.mood + " " + escapeHtml(en.title) + "</h3>" +
+          '<span class="date">' + formatDate(en.date) + "</span>" +
+          senderBadge +
+          (en.heading ? '<span class="heading-badge">📂 ' + escapeHtml(en.heading) + "</span>" : "") +
+        "</header>" +
+        '<p class="body">' + previewBody + "</p>" +
+        "<footer>" +
+          '<button class="del" data-id="' + en.id + '">🗑 Delete</button>' +
+        "</footer>" +
+      "</article>"
+    );
+  }
+
+  function paintEntryCards(entries) {
     emptyEl.style.display = entries.length ? "none" : "block";
     if (!currentUser) {
       emptyEl.textContent = "🔒 Private area — please Sign In to view your diary.";
@@ -650,45 +757,9 @@
 
     // NO numbering on the cards (user rule) — counting lives only in the
     // separate 🧮 Message Counter panel.
-    entries.forEach((en) => {
-      const article = document.createElement("article");
-      article.className = "entry";
-      const senderBadge = en.sender
-        ? '<span class="sender-badge ' + (en.sender === "Deep" ? "badge-deep" : "badge-chota") + '">📨 ' + escapeHtml(en.sender) + "</span>"
-        : "";
-      // COMPACT PREVIEW on the cards — FORMATTED, IDENTICAL TO THE BOOKLET:
-      // the card body now runs through the EXACT same renderer the booklet
-      // bubbles use (formatBookBodyHtml), so every entry — hand-written or
-      // legacy-imported, first on the page or last — is formatted the same
-      // way: the message line plus a styled 💭 "How I felt:" / 📝 "Note:"
-      // block. The old path double-scrubbed the renderer's own markup with
-      // finalScrub(), which glued the felt note onto the message and left
-      // &quot; entities visible — the raw-HTML look some entries still had.
-      // Now only CONTENT units are scrubbed (inside formatBookBodyHtml),
-      // never the presentation markup, and the card simply re-emits that
-      // markup with its own CSS classes below.
-      const previewBodyHtml = formatBookBodyHtml(en.body, en.sender);
-      // Turn the bubble HTML into card-safe markup: <span class="eb-extra">
-      // becomes a block-level .felt line (a <span> inside the pre-wrap <p>
-      // would not break onto its own row), the eb-label keeps its styling.
-      // Nothing else in the string can contain markup (every content unit was
-      // finalScrub()-flattened + escapeHtml()-escaped by the renderer).
-      const previewBody = previewBodyHtml
-        .replace(/<span class="eb-extra"><span class="eb-label">/g, '<br><span class="felt"><span class="eb-label">')
-        .replace(/<\/span><\/span>/g, "</span></span>");
-      article.innerHTML =
-        "<header>" +
-          "<h3>" + en.mood + " " + escapeHtml(en.title) + "</h3>" +
-          '<span class="date">' + formatDate(en.date) + "</span>" +
-          senderBadge +
-          (en.heading ? '<span class="heading-badge">📂 ' + escapeHtml(en.heading) + "</span>" : "") +
-        "</header>" +
-        '<p class="body">' + previewBody + "</p>" +
-        "<footer>" +
-          '<button class="del" data-id="' + en.id + '">🗑 Delete</button>' +
-        "</footer>";
-      listEl.appendChild(article);
-    });
+    // One single innerHTML write for the whole list (see PERFORMANCE FIX note
+    // above): identical markup to the old per-article append loop.
+    listEl.innerHTML = entries.map(buildEntryCardHtml).join("");
   }
 
   // ---------- Password-protected delete (entries are removed from the cloud too) ----------
@@ -756,7 +827,29 @@
     );
   });
 
-  searchEl.addEventListener("input", renderEntries);
+  // PERFORMANCE FIX: every keystroke in the search box used to fire a FULL
+  // cloud reload + list re-render (network round-trips per character — the
+  // main reason typing in search felt stuck). Now the matching entries are
+  // re-rendered INSTANTLY from the in-memory cache on each keystroke, and the
+  // cloud refresh is debounced to run once the user pauses typing.
+  let searchDebounce = null;
+  function renderEntriesFromCache() {
+    if (!currentUser) { listEl.innerHTML = ""; return; }
+    const query = searchEl.value.trim().toLowerCase();
+    const entries = loadEntries().filter(
+      (en) =>
+        (!activeHeadingFilter || (en.heading || "(No heading)") === activeHeadingFilter) &&
+        (!query ||
+          en.title.toLowerCase().includes(query) ||
+          en.body.toLowerCase().includes(query))
+    );
+    paintEntryCards(entries);
+  }
+  searchEl.addEventListener("input", () => {
+    renderEntriesFromCache(); // instant local feedback — zero network
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => { searchDebounce = null; renderEntries(); }, 350);
+  });
 
   // Clicking the locked empty state opens sign in
   emptyEl.addEventListener("click", () => {
