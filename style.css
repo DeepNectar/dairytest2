@@ -206,15 +206,8 @@ body {
 }
 .btn:active { transform: scale(0.97); }
 
-/* ---- Install App button (PWA) — header pill ---- */
-.btn-install {
-  background: linear-gradient(135deg, #b3456b, #8e2f52);
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(179, 69, 107, 0.35);
-  white-space: nowrap;
-}
-.btn-install:hover { filter: brightness(1.08); transform: translateY(-2px); }
-[data-theme="dark"] .btn-install { background: linear-gradient(135deg, #d96a92, #a34066); color: #fff; }
+/* ---- Install App button (PWA) — REMOVED for now (mobile app support later).
+     The #installBtn element no longer exists in index.html. ---- */
 
 .btn-primary {
   background: var(--accent);
@@ -490,10 +483,8 @@ textarea { resize: vertical; }
 
 @media (max-width: 720px) {
   .hamburger { display: flex; }
-  /* keep the header actions row tidy on phones: Install pill shrinks to icon,
-     Sign In collapses — everything stays visible without overflow */
-  #installBtn { padding: 0.45rem 0.6rem; font-size: 0.8rem; }
-  #installBtn .btn-txt-long { display: none; }
+  /* keep the header actions row tidy on phones: Sign In collapses —
+     everything stays visible without overflow */
   .nav-actions { gap: 0.45rem; }
   #authBtn { padding: 0.45rem 0.7rem; font-size: 0.8rem; }
   .nav-links {

@@ -1936,28 +1936,19 @@
   let spread = 0;       // current spread index (each spread = left+right page)
   let flipping = false;
 
-  // ---- PHONE MODE: ONE PAGE PER SCREEN, ALWAYS ----
+  // ---- SINGLE-PAGE MODE: ONE PAGE PER SCREEN, EVERYWHERE ----
   // THE BOOK IS ALWAYS A SINGLE-PAGE FLIP-UP VIEW — ON EVERY SCREEN SIZE.
   // The two-page spread ("book type view") has been REMOVED completely:
   // every numbered page (1, 2, 3 … to the end) gets its own screen and
   // turns with the upward sheet-flip animation (rotateX around the TOP
   // hinge). All data lives on the FRONT side only — the back of every
   // sheet is plain blank paper with no content whatsoever.
-  const PHONE_MQ = window.matchMedia("(max-width: 820px)");
-  function isPhoneBook() { return true; }   // single-page mode everywhere now
+  // NOTE: PWA / "install as app" code was removed for now — mobile-specific
+  // tuning will come later; this same layout runs on phones as a website.
   function applyPhoneModeClass() {
-    document.body.classList.toggle("book-phone-mode", isPhoneBook());
+    document.body.classList.add("book-phone-mode");
   }
   applyPhoneModeClass();
-  const onPhoneMqChange = () => {
-    applyPhoneModeClass();
-    fitBookZoom();
-    // crossing the breakpoint while the book is open → re-render so pages
-    // switch between one-per-screen (phone) and spreads (desktop) correctly
-    if (!bookModal.classList.contains("hidden") && bookPages.length) renderSpread();
-  };
-  if (PHONE_MQ.addEventListener) PHONE_MQ.addEventListener("change", onPhoneMqChange);
-  else if (PHONE_MQ.addListener) PHONE_MQ.addListener(onPhoneMqChange);
 
   // Fit the book to the available space. THE SAME MATHS RUN ON EVERY SCREEN
   // SIZE (desktop AND installed phone PWA): the wrap is pinned to the exact
@@ -4073,8 +4064,8 @@
     document.body.style.overflow = "";
   }
 
-  // (Breakpoint crossings are handled once by onPhoneMqChange above — it
-  // re-renders the open book into phone/desktop mode automatically.)
+  // (Single-page mode is fixed for every screen size — no breakpoint
+  // listeners needed; the layout never switches between modes.)
 
   $("#bookViewLink").addEventListener("click", (e) => { e.preventDefault(); openBook(); });
   $("#bookClose").addEventListener("click", closeBook);
@@ -4134,7 +4125,7 @@
       sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     }, { passive: true });
     stage.addEventListener("touchend", (e) => {
-      if (!tracking || !isPhoneBook()) { tracking = false; return; }
+      if (!tracking) { tracking = false; return; }
       tracking = false;
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
