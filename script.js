@@ -1936,22 +1936,27 @@
   let spread = 0;       // current spread index (each spread = left+right page)
   let flipping = false;
 
-  // ---------- PHONE MODE (book view) ----------
-  // On phone-sized screens the book is a FULL-SCREEN APP: one top app bar,
-  // ONE sheet at a time in the middle, one bottom tab bar — exactly 100vh
-  // tall, so nothing ever spills below the visible screen. The sheet keeps
-  // its standard A4 geometry and is fitted to whatever space is left with
-  // the same uniform `zoom` used for the desktop spread — pagination, ruled
-  // lines and the printed booklet are untouched.
-  // Pages turn ONLY by swiping left/right on the sheet (a plain tap never flips).
+  // ---- PHONE MODE: ONE PAGE PER SCREEN, ALWAYS ----
+  // Below the phone breakpoint the book is ALWAYS a single-page note-style
+  // reader — every numbered page (1, 2, 3 … to the end) gets its own screen
+  // and turns with the upward sheet-flip animation. This applies even when
+  // the book modal was opened on a larger screen and the window/device was
+  // then resized down: the view re-renders itself into phone mode instantly.
   const PHONE_MQ = window.matchMedia("(max-width: 820px)");
   function isPhoneBook() { return PHONE_MQ.matches; }
   function applyPhoneModeClass() {
     document.body.classList.toggle("book-phone-mode", isPhoneBook());
   }
   applyPhoneModeClass();
-  if (PHONE_MQ.addEventListener) PHONE_MQ.addEventListener("change", () => { applyPhoneModeClass(); fitBookZoom(); });
-  else if (PHONE_MQ.addListener) PHONE_MQ.addListener(() => { applyPhoneModeClass(); fitBookZoom(); });
+  const onPhoneMqChange = () => {
+    applyPhoneModeClass();
+    fitBookZoom();
+    // crossing the breakpoint while the book is open → re-render so pages
+    // switch between one-per-screen (phone) and spreads (desktop) correctly
+    if (!bookModal.classList.contains("hidden") && bookPages.length) renderSpread();
+  };
+  if (PHONE_MQ.addEventListener) PHONE_MQ.addEventListener("change", onPhoneMqChange);
+  else if (PHONE_MQ.addListener) PHONE_MQ.addListener(onPhoneMqChange);
 
   // Fit the book to the available space. Desktop: the whole 2×A4 spread is
   // scaled down inside the modal. Phone: the wrap is pinned to the exact
@@ -3103,64 +3108,66 @@
 
   function renderSpread() {
     updateBookAddBtn();   // ➕ Add tab appears only while a book filter is active
+    // On phones every numbered page (1, 2, 3 …) gets its OWN screen, so the
+    // phone "spread" counter must never be clamped to the desktop sheet count
+    // — clamp per mode instead.
+    const totalSpreads = Math.max(1, Math.ceil(bookPages.length / 2));
+    if (!isPhoneBook() && spread >= totalSpreads) { spread = totalSpreads - 1; }
     const li = spread * 2;      // left page index
     const ri = spread * 2 + 1;  // right page index
     const lc = $("#leftContent"), rc = $("#rightContent");
-    // If the saved bookmark points past the end of a (shorter) rebuilt book,
-    // clamp and retry once so Next/Prev always have valid pages to show.
-    const totalSpreads = Math.max(1, Math.ceil(bookPages.length / 2));
-    if (spread >= totalSpreads) { spread = totalSpreads - 1; }
-    // ---- PHONE MODE: ONE SHEET AT A TIME ----
-    // Every sheet gets its own screen (sheet 1, sheet 2, …). The visible slot
-    // is the LEFT page; on ODD spreads we mirror it into the RIGHT slot with
-    // the right-page header/footer markup so each sheet still wears its own
-    // page number, initials monogram and "Our Love" stamp — exactly like the
-    // corresponding side of the desktop spread and the printed booklet.
+    // ---- PHONE MODE: ONE PAGE AT A TIME, CONTINUOUS NUMBERING ----
+    // Every numbered page (1, 2, 3, 4, 5 … till the end) gets its OWN screen
+    // as a single full-width sheet rendered in the LEFT slot — which carries
+    // the correct per-side header/footer chrome for odd AND even pages. No
+    // page is ever skipped or mirrored away, so numbering runs contiguously
+    // and every page shows its entry preview properly.
     const phone = isPhoneBook();
-    const showRight = phone && (spread % 2 === 1);
-    lc.innerHTML = showRight ? "" : pageHTML(li);
-    rc.innerHTML = showRight ? pageHTML(ri) : (phone ? "" : pageHTML(ri));
+    const cur = phone ? spread : li;               // phone: one page per screen
+    lc.innerHTML = pageHTML(cur);
+    rc.innerHTML = phone ? "" : pageHTML(ri);
     // apply random stickers on all book pages (staggered so the two sides
     // decorate different free spots — never look like mirrored clones)
-    if (!showRight) addStickersToPage(lc, "L" + li);
-    else addStickersToPage(rc, "R" + ri);
+    addStickersToPage(lc, "L" + cur);
     if (!phone) addStickersToPage(rc, "R" + ri);
-    // Real sheet numbers on EVERY page (cover = page 1). A trailing padding
-    // sheet is left blank instead of showing a number for a non-existent page.
-    const lastIdx = Math.max(0, bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1));
-    if (phone) {
-      const cur = spread * 2 + (showRight ? 1 : 0);
-      $("#leftNum").textContent  = !showRight && cur <= lastIdx ? String(cur + 1) : "";
-      $("#rightNum").textContent =  showRight && cur <= lastIdx ? String(cur + 1) : "";
-    } else {
-      $("#leftNum").textContent  = li <= lastIdx ? String(li + 1) : "";
-      $("#rightNum").textContent = ri <= lastIdx ? String(ri + 1) : "";
-    }
-    // On phones the book shows ONE sheet at a time, so say "Page", not "Spread".
-    const pageInfoTxt = (isPhoneBook() ? "Page " : "Spread ") + (spread + 1) + " / " + totalSpreads;
+    // Real page numbers on EVERY page (cover = page 1). Only the trailing
+    // padding sheet (added to complete the last desktop spread) stays blank —
+    // it has no content, so it must not wear a number.
+    const lastIdx = bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1);
+    $("#leftNum").textContent  = cur <= lastIdx ? String(cur + 1) : "";
+    $("#rightNum").textContent = !phone && ri <= lastIdx ? String(ri + 1) : "";
+    // Page count differs between modes: the phone walks EVERY numbered page
+    // (1..N), the desktop turns sheets (each sheet = 2 pages).
+    const totalPages = Math.max(1, lastIdx + 1);
+    const pageInfoTxt = phone
+      ? "Page " + (cur + 1) + " / " + totalPages
+      : "Spread " + (spread + 1) + " / " + totalSpreads;
     $("#spreadInfo").textContent = pageInfoTxt;
     const sip = $("#spreadInfoPhone"); if (sip) sip.textContent = pageInfoTxt;
-    $("#prevPageBtn").disabled = spread <= 0;
-    $("#nextPageBtn").disabled = spread >= totalSpreads - 1;
-    const tp = $("#tabPrev"), tn = $("#tabNext");   // phone tab bar (hidden — swipe only)
-    if (tp) tp.disabled = spread <= 0;
-    if (tn) tn.disabled = spread >= totalSpreads - 1;
+    const maxPos = phone ? totalPages - 1 : totalSpreads - 1;
+    $("#prevPageBtn").disabled = phone ? cur <= 0 : spread <= 0;
+    $("#nextPageBtn").disabled = phone ? cur >= maxPos : spread >= maxPos;
+    const tp = $("#tabPrev"), tn = $("#tabNext");   // phone tab bar (Prev/Next)
+    if (tp) tp.disabled = cur <= 0;
+    if (tn) tn.disabled = cur >= maxPos;
     fitBookZoom();
     updateSaveState();
   }
 
-  // ---------- Book: saved reading position ("save once → opens there") ----------
-  // The exact sheet the reader was on when they pressed SAVE is stored per
-  // user in the cloud (settings table). Next time the book is opened we jump
-  // straight to that page — on ANY device — no rebuild needed, the book
-  // always paginates identically.
+  // ---------- Book: reading position (session-only, NEVER stored on device) ----------
+  // The book ALWAYS opens at page 1 and rebuilds itself from the source code
+  // + cloud data on every single open — nothing about the book is cached or
+  // saved locally (no localStorage / sessionStorage / IndexedDB anywhere).
+  // "Save" only writes the bookmark row to the Supabase cloud (visible on
+  // every device); it never touches local storage, and a plain refresh of
+  // the page always re-renders exactly what the current code produces.
   async function loadSavedSpreadFromCloud() {
     if (!currentUser) { savedSpreadCloud = 0; return; }
     try {
       const rows = await syncGet("settings", "select=value&owner=eq." + encodeURIComponent(currentUser.toLowerCase()) + "&key=eq.book_page");
       const v = rows && rows.length ? parseInt(rows[0].value, 10) : 0;
       savedSpreadCloud = isNaN(v) || v < 0 ? 0 : v;
-    } catch (e) { /* keep last known value */ }
+    } catch (e) { savedSpreadCloud = 0; /* cloud unreachable → start at page 1 */ }
   }
   async function saveBookPosition() {
     if (!currentUser) { showToast("Please sign in first 🔒"); return; }
@@ -3943,40 +3950,38 @@
 
   function flipPage(dir) {
     if (flipping) return;
-    const totalSpreads = Math.ceil(bookPages.length / 2);
-    if (dir === "next" && spread >= totalSpreads - 1) return;
-    if (dir === "prev" && spread <= 0) return;
 
-    // ---- PHONE MODE: one sheet per screen, plain slide transition ----
-    // The two-page leaf animation is a spread effect; on the phone we just
-    // slide the single sheet out and the next one in. Same spread counter,
-    // same pages — only the animation differs.
+    // ---- PHONE MODE: one PAGE per screen, upward note-style page flip ----
+    // Every numbered page (1, 2, 3 … to the end) is its own screen. Turning
+    // a page lifts the current sheet from the BOTTOM edge and rotates it
+    // UPWARD like flipping a sticky-note pad: Next flips the sheet up and
+    // away revealing the following page; Prev brings the previous page back
+    // down into view. Purely visual — the pagination engine, page numbers,
+    // ruled geometry and the printed booklet are untouched.
     if (isPhoneBook()) {
+      const totalPages = Math.max(1, bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1) + 1);
+      if (dir === "next" && spread >= totalPages - 1) return;
+      if (dir === "prev" && spread <= 0) return;
       flipping = true;
       const bookEl = $("#book");
-      const dirSign = dir === "next" ? -1 : 1;
-      bookEl.style.transition = "transform .32s ease";
-      bookEl.style.transform = "translateX(" + (dirSign * 60) + "px)";
-      bookEl.style.opacity = "0";
+      const cls = dir === "next" ? "phone-flip-up" : "phone-flip-down";
+      bookEl.classList.remove("phone-flip-up", "phone-flip-down");
+      void bookEl.offsetWidth;                 // restart the CSS animation
+      bookEl.classList.add(cls);
       setTimeout(() => {
         if (dir === "next") spread += 1; else spread -= 1;
         renderSpread();
-        bookEl.style.transition = "none";
-        bookEl.style.transform = "translateX(" + (-dirSign * 60) + "px)";
-        // force reflow so the start position applies before animating back
-        void bookEl.offsetWidth;
-        bookEl.style.transition = "transform .32s ease, opacity .32s ease";
-        bookEl.style.transform = "translateX(0)";
-        bookEl.style.opacity = "1";
-        setTimeout(() => {
-          bookEl.style.transition = "";
-          bookEl.style.transform = "";
-          bookEl.style.opacity = "";
-          flipping = false;
-        }, 340);
-      }, 320);
+      }, 280);                                 // swap content mid-flight
+      setTimeout(() => {
+        bookEl.classList.remove(cls);
+        flipping = false;
+      }, 580);
       return;
     }
+
+    const totalSpreads = Math.ceil(bookPages.length / 2);
+    if (dir === "next" && spread >= totalSpreads - 1) return;
+    if (dir === "prev" && spread <= 0) return;
 
     flipping = true;
     if (dir === "next") {
@@ -4062,12 +4067,12 @@
       fitBookZoom();
       requestAnimationFrame(async () => {
       bookPages = await buildBookPages();
-      // Jump straight to the page saved with the SAVE button last time
-      // (read fresh from the cloud, so any device opens at the same spot),
-      // clamped into the valid range (entries may have changed since).
-      await loadSavedSpreadFromCloud();
-      const totalSpreads = Math.max(1, Math.ceil(bookPages.length / 2));
-      spread = Math.min(savedSpreadCloud, totalSpreads - 1);
+      // 🔄 ALWAYS start at page 1 and rebuild strictly from the current code
+      // + cloud data on every open — no reading position or book state is
+      // ever saved locally, so a refresh always shows exactly what the code
+      // produces. (The 📌 Save button still bookmarks to the cloud; it just
+      // never auto-jumps on open.)
+      spread = 0;
       renderSpread();
       });
     });
@@ -4080,11 +4085,8 @@
     document.body.style.overflow = "";
   }
 
-  // Phone mode flips its single visible sheet between the left/right slots as
-  // the viewport crosses the phone breakpoint while the book is open.
-  PHONE_MQ.addEventListener && PHONE_MQ.addEventListener("change", () => {
-    if (!bookModal.classList.contains("hidden") && bookPages.length) renderSpread();
-  });
+  // (Breakpoint crossings are handled once by onPhoneMqChange above — it
+  // re-renders the open book into phone/desktop mode automatically.)
 
   $("#bookViewLink").addEventListener("click", (e) => { e.preventDefault(); openBook(); });
   $("#bookClose").addEventListener("click", closeBook);
@@ -4104,6 +4106,17 @@
   if (printBtn) printBtn.addEventListener("click", printBooklet);
   $("#pageRight").addEventListener("click", () => { if (!isPhoneBook()) flipPage("next"); });
   $("#pageLeft").addEventListener("click", () => { if (!isPhoneBook()) flipPage("prev"); });
+  // Phone: a plain tap on the sheet turns to the NEXT page (notes-style
+  // reader — every screen is one page). Clicks only fire when the pointer
+  // stays put, and any click that follows a swipe within 700 ms is ignored,
+  // so a swipe can never turn two pages.
+  const phoneTap = document.querySelector("#bookModal .book-stage");
+  if (phoneTap) phoneTap.addEventListener("click", (e) => {
+    if (!isPhoneBook() || flipping) return;
+    if (Date.now() - lastSwipeAt < 700) return;
+    if (e.target.closest("button, a, input, select, textarea, #bookFilterBar")) return;
+    flipPage("next");
+  });
   bookModal.addEventListener("click", (e) => { if (e.target === bookModal) closeBook(); });
   document.addEventListener("keydown", (e) => {
     if (bookModal.classList.contains("hidden")) return;
@@ -4112,9 +4125,11 @@
     if (e.key === "Escape") closeBook();
   });
 
-  // ---- PHONE: swipe left/right on the sheet to turn pages. A plain tap
-  // does NOTHING (per requirement — only swipes navigate). Registered with
-  // passive:true so the browser never blocks scrolling while we observe.
+  // ---- PHONE: swipe left/right on the sheet to turn pages, OR simply tap
+  // it (notes-style reader — every screen is one page). Horizontal swipes
+  // still work and are guarded so a swipe never turns TWO pages. Registered
+  // with passive:true so the browser never blocks scrolling while we observe.
+  let lastSwipeAt = 0;
   (function attachBookSwipe() {
     const stage = document.querySelector("#bookModal .book-stage");
     if (!stage) return;
@@ -4132,6 +4147,8 @@
       const dx = t.clientX - sx, dy = t.clientY - sy;
       // must be a clear horizontal drag, not a tap and not a vertical scroll
       if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      // mark the swipe so the follow-up click never turns an extra page
+      lastSwipeAt = Date.now();
       flipPage(dx < 0 ? "next" : "prev");
     }, { passive: true });
     stage.addEventListener("touchmove", (e) => {
