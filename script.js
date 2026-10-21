@@ -1959,18 +1959,18 @@
   if (PHONE_MQ.addEventListener) PHONE_MQ.addEventListener("change", onPhoneMqChange);
   else if (PHONE_MQ.addListener) PHONE_MQ.addListener(onPhoneMqChange);
 
-  // Fit the book to the available space. Desktop: the whole 2×A4 spread is
-  // scaled down inside the modal. Phone: the wrap is pinned to the exact
-  // viewport height (top bar + stage + bottom bar = 100dvh) and the single
-  // sheet is scaled to fit the stage box — width AND height.
+  // Fit the book to the available space. THE SAME MATHS RUN ON EVERY SCREEN
+  // SIZE (desktop AND installed phone PWA): the wrap is pinned to the exact
+  // visible viewport height, the single A4 sheet is scaled to fit the stage
+  // box — width AND height — with a small paper margin at the screen edges.
   // `zoom` is purely visual — layout px inside the sheet stay standard, so
   // the paginator's measurements never change.
   function fitBookZoom() {
     const stage = document.querySelector("#bookModal .book-stage");
     const bookEl = $("#book");
     if (!stage || !bookEl) return;
-    const single = document.body.classList.contains("book-phone-mode");
-    // Pin the phone "app page" to the EXACT visible viewport so the bottom
+    const single = true;   // ONE PAGE PER SCREEN on every device — always
+    // Pin the "app page" to the EXACT visible viewport so the bottom
     // tab bar always sits right above the home indicator — never off-screen.
     if (single) {
       const vh = Math.max(window.innerHeight, document.documentElement.clientHeight) || innerHeight;
@@ -1978,7 +1978,7 @@
     } else {
       const w = $(".book-wrap"); if (w) w.style.height = "";
     }
-    // On phones the sheet hugs the screen edges — give it a little paper margin
+    // The sheet hugs the screen edges — give it a little paper margin
     if (single) stage.style.padding = "0 3px";
     else stage.style.padding = "";
     const cs = getComputedStyle(stage);

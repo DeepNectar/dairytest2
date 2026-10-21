@@ -6,7 +6,9 @@
      • never touch cross-origin requests (Supabase API, Google Fonts at runtime,
        Drive images) — they pass straight to the network.
 */
-const CACHE = "dairywriting-v1";
+const CACHE = "dairywriting-v2";   // bumped: force-refresh the installed PWA
+                                   // shell so every phone gets the new
+                                   // single-page flip-up book layout at once
 const SHELL = [
   "./",
   "./index.html",
