@@ -2867,6 +2867,41 @@
         return units;
       };
 
+      // COMPACT + TRIM FOR THE PDF PATH TOO: the bubble body is re-packed
+      // through the SAME trimEntryLines() rule the preview cards use, so the
+      // printed booklet carries entry data with ALL unnecessary gaps and
+      // spaces removed — no blank spacer rows, no dash-only noise lines, no
+      // doubled inner spaces. The presentation markup (eb-extra / eb-label
+      // spans, <br> joins) is torn down to plain labelled text first and
+      // rebuilt afterwards, exactly like normaliseStoredBody() does for
+      // legacy rows; every content unit was already finalScrub()-flattened
+      // and escapeHtml()-escaped by formatBookBodyHtml(), so nothing can
+      // leak as raw HTML. Idempotent for bodies that are already compact.
+      const packBodyCompact = (html) => {
+        const txt = String(html || "")
+          .replace(/<div\b[^>]*eb-heading-band[^>]*>[\s\S]*?<\/div>/gi, "")  // band lives in the head line
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<span\b[^>]*eb-label[^>]*>([\s\S]*?)<\/span>/gi, "$1")   // keep "💭 How I felt: " label text
+          .replace(/<\/?span\b[^>]*eb-extra[^>]*>/gi, "\n")
+          .replace(/<[^>]*>/g, "");
+        let m2 = "", f2 = "", n2 = "", mode2 = "m";
+        txt.split(/\r?\n/).forEach((ln) => {
+          const s = ln.trim();
+          if (/^(?:💭\s*)?what\s+i\s+felt\s*:?\s*$/i.test(s)) { mode2 = "f"; return; }
+          if (/^(?:📝\s*)?note\s*:?\s*$/i.test(s))            { mode2 = "n"; return; }
+          if (/^what\s+i\s+felt\s*:/i.test(s))                { mode2 = "f"; f2 += s.replace(/^what\s+i\s+felt\s*:\s*/i, ""); return; }
+          if (/^note\s*:/i.test(s))                           { mode2 = "n"; n2 += s.replace(/^note\s*:\s*/i, ""); return; }
+          if (mode2 === "f") f2 += (f2 ? "\n" : "") + s;
+          else if (mode2 === "n") n2 += (n2 ? "\n" : "") + s;
+          else m2 += (m2 ? "\n" : "") + s;
+        });
+        const mm = trimEntryLines(m2), ff = trimEntryLines(f2), nn = trimEntryLines(n2);
+        let out = mm.map(escapeHtml).join("<br>");
+        if (ff.length) out += "<span class=\"eb-extra\">\n<span class=\"eb-label\">💭 How I felt: </span>\n" + ff.map(escapeHtml).join("<br>") + "\n</span>\n";
+        if (nn.length) out += "<span class=\"eb-extra\">\n<span class=\"eb-label\">📝 Note: </span>\n" + nn.map(escapeHtml).join("<br>") + "\n</span>\n";
+        return out;
+      };
+      b.htmlBody = packBodyCompact(b.htmlBody);
       const srcUnits = splitSourceLines(b.htmlBody);
       if (!srcUnits.length) {                  // empty body: keep whole bubble
         if (cur) { cur += emitSlots(); newPage(); }
@@ -4275,24 +4310,26 @@
   // Pretty HTML for the inside of a message bubble: the plain message first,
   // then its related extras with soft labels ("How I felt", "Note").
   // ---- COMPACT ENTRY TRIMMER (preview + PDF get the SAME trimmed text) ----
-  // One entry is kept COMPACT in the booklet: leading/trailing blank lines and
-  // stray dashes are dropped, consecutive blanks collapse to a single spacer,
-  // over-long messages fold into a proper preview that ENDS ON A WORD BOUNDARY
-  // with an ellipsis (…) — never mid-word, never hanging past the page edge.
-  // The full text always stays untouched in Supabase; only the rendered
-  // preview is compacted. Entries that fit comfortably render whole.
+  // ONE RULE for every entry in BOTH render targets (on-screen preview AND
+  // printed PDF): the data of each entry is TRIMMED and every unnecessary gap
+  // or space is REMOVED. Leading/trailing blank lines, blank runs between the
+  // message / 💭 felt / 📝 note parts, dash-only separator lines ("---"),
+  // non-breaking spaces and doubled inner spaces all vanish — NO blank spacer
+  // line survives anywhere, so entries pack tight with zero dead rows.
+  // Over-long messages still fold into a proper preview that ENDS ON A WORD
+  // BOUNDARY with an ellipsis (…) — never mid-word, never hanging past the
+  // page edge. The full text always stays untouched in Supabase; only the
+  // rendered preview is compacted. Entries that fit comfortably render whole.
   const BOOK_PREVIEW_MAX_CHARS = 620;   // ~14 ruled rows — one tidy diary block
   const BOOK_PREVIEW_MAX_LINES  = 14;   // hard line cap per bubble body
 
   function trimEntryLines(text) {
     const out = [];
-    String(text || "").split(/\r?\n/).forEach((ln) => {
-      const t = ln.replace(/^\s*[-–—]+\s*$/, "").trim();   // bare "---" separators vanish
-      if (!t) { if (out.length && out[out.length - 1] !== "") out.push(""); return; }
-      out.push(t.replace(/[ \t]+/g, " "));                 // inner double spaces collapse
+    String(text || "").replace(/\u00a0/g, " ").split(/\r?\n/).forEach((ln) => {
+      const t = ln.replace(/^\s*[-–—•*_~]+\s*$/, "").trim();   // bare "---" separators vanish
+      if (!t) return;                                          // COMPACT: blank lines NEVER survive
+      out.push(t.replace(/[ \t]+/g, " "));                     // inner double spaces collapse
     });
-    while (out.length && !out[out.length - 1]) out.pop();  // trailing blanks trimmed
-    while (out.length && !out[0]) out.shift();             // leading blanks trimmed
     return out;
   }
 
@@ -4579,10 +4616,14 @@
       (mode === "felt" ? felt : mode === "note" ? note : main).push(ln);
     }
     while (main.length && !main[main.length - 1].trim()) main.pop();
-    // COMPACT TRIM: blank/dash noise gone from the message AND its extras
-    main = trimEntryLines(main.join("\n"));
-    felt = trimEntryLines(felt.join("\n"));
-    note = trimEntryLines(note.join("\n"));
+    // COMPACT TRIM: EVERY data part of the entry — message, 💭 felt and 📝
+    // note alike — is trimmed through the SAME one rule shared with the PDF
+    // path (compactEntryParts): all blank lines, dash-only separators and
+    // unnecessary inner spaces are removed. No spacer row survives anywhere.
+    const cParts = compactEntryParts(main.join("\n"), felt.join("\n"), note.join("\n"));
+    main = cParts.main;
+    felt = cParts.felt;
+    note = cParts.note;
     // Fold an over-long message into a proper word-boundary preview (…)
     main = compactPreview(main);
     // RAW-HTML LEAK KILLER (content side): every TEXT unit that goes into
