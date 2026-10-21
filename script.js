@@ -830,6 +830,279 @@
   const existingChipRow = $("#headingChips");
   if (existingChipRow) wireHeadingChipClicks(existingChipRow);
 
+  // ---------- 📖 BOOK-VIEW CATEGORY / HEADING FILTER ----------
+  // Inside the A4 Book View there is its OWN filter bar at the START of the
+  // book: one chip per heading present in the diary (+ "All"), plus a sender
+  // toggle (Deep / Honey). The book preview then shows ONLY the entries
+  // matching the selected heading (and sender). When nothing is selected —
+  // i.e. the default "🗂 All" state — the book previews EXACTLY as regular:
+  // every entry, cover first, flowed oldest → newest.
+  // This state is independent from the main-screen chips above: picking a
+  // category on one surface never silently filters the other.
+  let bookHeadingFilter = "";   // "" = All categories (regular book)
+  let bookSenderFilter = "";    // "" = Both senders
+  function bookHeadingCounts() {
+    const map = {};
+    loadEntries().forEach((en) => {
+      const h = en.heading || "(No heading)";
+      map[h] = (map[h] || 0) + 1;
+    });
+    return map;
+  }
+  // Injected by script.js itself — no index.html change needed. It sits at
+  // the very start of the book view, right under the title and ABOVE the
+  // pages, so it stays visible while the reader flips sheets (phone mode:
+  // under the app bar, above the sheet stage).
+  function ensureBookFilterBar() {
+    let bar = $("#bookFilterBar");
+    if (bar) return bar;
+    const stage = document.querySelector("#bookModal .book-stage");
+    if (!stage) return null;
+    bar = document.createElement("div");
+    bar.id = "bookFilterBar";
+    bar.className = "book-filter-bar";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Filter the book preview by heading / category and sender");
+    stage.parentNode.insertBefore(bar, stage);
+    bar.addEventListener("click", (e) => {
+      const btn = e.target.closest(".bf-chip");
+      if (!btn) return;
+      if (btn.dataset.bfKind === "heading") {
+        bookHeadingFilter = btn.dataset.bfValue || "";
+      } else if (btn.dataset.bfKind === "sender") {
+        const v = btn.dataset.bfValue || "";
+        bookSenderFilter = bookSenderFilter === v ? "" : v; // tap again = clear
+      } else return;
+      rebuildBookPreview();
+    });
+    return bar;
+  }
+  function renderBookFilterBar() {
+    const bar = ensureBookFilterBar();
+    if (!bar) return;
+    const counts = bookHeadingCounts();
+    const keys = Object.keys(counts).sort((a, b) =>
+      a === "(No heading)" ? 1 : b === "(No heading)" ? -1 : a.localeCompare(b));
+    const total = loadEntries().length;
+    const chip = (kind, label, value, n, active) =>
+      '<button type="button" class="bf-chip' + (active ? " active" : "") + '"' +
+      ' data-bf-kind="' + kind + '" data-bf-value="' + escapeHtml(value) + '">' +
+      escapeHtml(label) + (n != null ? ' <span class="bf-chip-n">' + n + "</span>" : "") +
+      "</button>";
+    bar.innerHTML =
+      '<span class="bf-label">📂 In this book:</span>' +
+      chip("heading", "🗂 All", "", total, bookHeadingFilter === "") +
+      keys.map((k) => chip("heading", k, k, counts[k], bookHeadingFilter === k)).join("") +
+      '<span class="bf-sep"></span>' +
+      '<span class="bf-label">📨 From:</span>' +
+      chip("sender", "Both", "", null, bookSenderFilter === "") +
+      chip("sender", "Deep", "Deep", null, bookSenderFilter === "Deep") +
+      chip("sender", "Honey", "Honey", null, bookSenderFilter === "Honey");
+  }
+  // Re-page the book with the current selection and jump back to page 1 —
+  // filtered books are shorter, so an old bookmark must never dangle.
+  async function rebuildBookPreview() {
+    spread = 0;
+    savedSpreadCloud = 0;
+    $("#leftContent").innerHTML = "";
+    $("#rightContent").innerHTML = "";
+    bookPages = await buildBookPages();
+    renderSpread();
+    const shown = countBookFilteredEntries();
+    if (bookHeadingFilter || bookSenderFilter) {
+      showToast(shown > 0
+        ? "📖 Book filtered — showing " + shown + " match" + (shown === 1 ? "ing entry" : "ing entries") + " ✨"
+        : "📖 No entries match this filter — pick another heading or tap 🗂 All");
+    }
+  }
+  function countBookFilteredEntries() {
+    return loadEntries().filter(bookEntryMatchesFilter).length;
+  }
+  // ONE shared predicate used by BOTH the live book builder and the printed
+  // booklet, so the PDF always matches what the screen preview showed.
+  // Nothing selected (the default) ⇒ every entry passes ⇒ regular book.
+  function bookEntryMatchesFilter(en) {
+    if (!en) return false;
+    const h = bookHeadingFilter ? (en.heading || "(No heading)") : "";
+    if (bookHeadingFilter && h !== bookHeadingFilter) return false;
+    if (bookSenderFilter && String(en.sender || "") !== bookSenderFilter) return false;
+    return true;
+  }
+
+  // ---------- ✍️ ADD-TO-THE-BACK-OF-THE-BOOK ----------
+  // While a category filter is active inside the book view, the SAVE tab
+  // grows into a ➕ Add button: writing a message for that category adds it
+  // to the END of the book (newest position) and keeps the filter applied,
+  // so the fresh entry appears right where the reader expects it.
+  let bookAddOpen = false;
+  function ensureBookAddControls() {
+    // ➕ Add tab in the phone bottom bar (hidden until a book filter is on)
+    const tabbar = $("#appTabbar");
+    if (tabbar && !$("#tabAddEntry")) {
+      const btn = document.createElement("button");
+      btn.className = "app-tab hidden";
+      btn.id = "tabAddEntry";
+      btn.type = "button";
+      btn.title = "Add a new entry under the selected heading — goes to the end of the book";
+      btn.innerHTML = '<span class="app-tab-ic">➕</span><span class="app-tab-lbl">Add</span>';
+      const tSave = $("#tabSave");
+      tabbar.insertBefore(btn, tSave || null);
+    }
+    // Desktop control row gets the same ➕ Add button
+    const controls = document.querySelector("#bookModal .book-controls");
+    if (controls && !$("#addEntryDesktopBtn")) {
+      const btn2 = document.createElement("button");
+      btn2.className = "btn btn-primary hidden";
+      btn2.id = "addEntryDesktopBtn";
+      btn2.type = "button";
+      btn2.textContent = "➕ Add Entry";
+      btn2.title = "Add a new entry under the selected heading — goes to the end of the book";
+      const sBtn = $("#saveBookBtn");
+      controls.insertBefore(btn2, sBtn || null);
+    }
+    // The mini writing pane lives INSIDE the stage next to the sheet, so it
+    // is always fully visible within the book view (phone + desktop).
+    const stage = document.querySelector("#bookModal .book-stage");
+    if (stage && !$("#bookAddPane")) {
+      const pane = document.createElement("div");
+      pane.className = "book-add-pane hidden";
+      pane.id = "bookAddPane";
+      pane.innerHTML =
+        '<h4 class="ba-title">✍️ New entry <span class="ba-sub" id="baSub"></span></h4>' +
+        '<form id="bookAddForm">' +
+          '<input id="baTitle" type="text" placeholder="Title…" autocomplete="off">' +
+          '<textarea id="baBody" rows="5" placeholder="Dear Diary…"></textarea>' +
+          '<div class="ba-meta">' +
+            '<select id="baHeading" title="Category / heading"></select>' +
+            '<select id="baSender" title="Who wrote this message?">' +
+              '<option value="Deep">🥛 Deep</option><option value="Honey">🍯 Honey</option>' +
+            '</select>' +
+            '<select id="baMood" title="Mood">' +
+              '<option value="😊">😊 Happy</option><option value="😌">😌 Calm</option>' +
+              '<option value="🤔">🤔 Thoughtful</option><option value="😴">😴 Tired</option>' +
+              '<option value="🥲">🥲 Bittersweet</option><option value="🔥">🔥 Inspired</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="ba-btns">' +
+            '<button type="button" class="btn btn-ghost" id="baCancel">Cancel</button>' +
+            '<button type="button" class="btn btn-primary" id="baSave">💾 Save to End of Book</button>' +
+          '</div>' +
+        '</form>';
+      stage.appendChild(pane);
+    }
+    if (!$("#bookAddPane")?.dataset.wired) {
+      wireBookAddControls();
+      const p = $("#bookAddPane"); if (p) p.dataset.wired = "1";
+    }
+    const dBtn = $("#addEntryDesktopBtn");
+    if (dBtn && !dBtn.dataset.wired) {
+      dBtn.dataset.wired = "1";
+      dBtn.addEventListener("click", () => { bookAddOpen ? closeBookAddPane() : openBookAddPane(); });
+    }
+    syncBookAddBtns();
+  }
+  function syncBookAddBtns() {
+    const show = !!(bookHeadingFilter || bookSenderFilter);
+    const dBtn = $("#addEntryDesktopBtn");
+    if (dBtn) dBtn.classList.toggle("hidden", !show);
+    const sub = $("#baSub");
+    if (sub) {
+      const parts = [];
+      if (bookHeadingFilter) parts.push(bookHeadingFilter);
+      if (bookSenderFilter) parts.push("from " + bookSenderFilter);
+      sub.textContent = parts.length ? "→ " + parts.join(" ") + " · goes to the END of the book" : "";
+    }
+  }
+  function updateBookAddBtn() {
+    const btn = $("#tabAddEntry");
+    if (!btn) return;
+    const show = !!(bookHeadingFilter || bookSenderFilter);
+    btn.classList.toggle("hidden", !show);
+    if (show) {
+      const lbl = btn.querySelector(".app-tab-lbl");
+      if (lbl) lbl.textContent = "➕ Add";
+      btn.title = "Add a new entry under “" + (bookHeadingFilter || "filtered selection") +
+        "” — it goes to the end of the book";
+    }
+    syncBookAddBtns();
+  }
+  function openBookAddPane() {
+    const pane = $("#bookAddPane");
+    if (!pane) return;
+    bookAddOpen = true;
+    pane.classList.remove("hidden");
+    const t = $("#baTitle"), b = $("#baBody");
+    if (t) t.value = "";
+    if (b) b.value = "";
+    const sel = $("#baHeading");
+    if (sel) {
+      // Preselect the heading currently being viewed in the book.
+      sel.innerHTML =
+        '<option value="">✍️ Auto-detect category</option>' +
+        DIARY_HEADINGS.map((h) =>
+          '<option value="' + escapeHtml(h.label) + '"' +
+          (h.label === bookHeadingFilter ? " selected" : "") + ">" +
+          escapeHtml(h.label) + "</option>").join("") +
+        ((bookHeadingFilter && !DIARY_HEADINGS.some((h) => h.label === bookHeadingFilter))
+          ? '<option value="' + escapeHtml(bookHeadingFilter) + '" selected>' +
+            escapeHtml(bookHeadingFilter) + "</option>"
+          : "");
+    }
+    const who = $("#baSender");
+    if (who) who.value = bookSenderFilter || getSelectedSender();
+    fitBookZoom();
+    if (t) setTimeout(() => t.focus(), 60);
+  }
+  function closeBookAddPane() {
+    bookAddOpen = false;
+    const pane = $("#bookAddPane");
+    if (pane) pane.classList.add("hidden");
+    fitBookZoom();
+  }
+  async function saveBookAddEntry() {
+    if (!currentUser) { closeBookAddPane(); openAuth("signin"); showToast("Please sign in first 🔒"); return; }
+    const titleEl = $("#baTitle"), bodyEl = $("#baBody");
+    const title = titleEl ? titleEl.value.trim() : "";
+    const body = bodyEl ? bodyEl.value.trim() : "";
+    if (!title || !body) { showToast("Please add a title and some words 🐄"); return; }
+    const selHead = $("#baHeading");
+    const heading = (selHead && selHead.value) || detectHeading(body, ($("#baSender") || {}).value || "Deep");
+    const sender = ($("#baSender") || {}).value || getSelectedSender();
+    const mood = ($("#baMood") || {}).value || "love";
+    const en = {
+      id: Date.now(),
+      title: title,
+      body: body,
+      mood: mood,
+      sender: sender,
+      heading: heading,           // filed under the category being read
+      date: new Date().toISOString(),
+      words: countWords(body),
+    };
+    try {
+      await syncPost("entries", [{
+        id: en.id, owner: currentUser.toLowerCase(), title: en.title, body: en.body,
+        mood: en.mood, sender: en.sender, heading: en.heading, date: en.date, words: en.words,
+      }]);
+      entriesCache = entriesCache.concat([en]); // newest ⇒ flows to the END of the book
+      closeBookAddPane();
+      renderHeadingChips();
+      renderEntries();
+      await rebuildBookPreview();   // keeps the active filter — new entry lands last
+      showToast("✅ Added to the end of the book 📖✨");
+    } catch (e) {
+      showToast("☁️ Could not save to the cloud — check your connection");
+    }
+  }
+  function wireBookAddControls() {
+    const tabAdd = $("#tabAddEntry");
+    if (tabAdd) tabAdd.addEventListener("click", () => { bookAddOpen ? closeBookAddPane() : openBookAddPane(); });
+    const cancel = $("#baCancel"); if (cancel) cancel.addEventListener("click", closeBookAddPane);
+    const save = $("#baSave"); if (save) save.addEventListener("click", saveBookAddEntry);
+    const form2 = $("#bookAddForm");
+    if (form2) form2.addEventListener("submit", (e) => { e.preventDefault(); saveBookAddEntry(); });
+  }
+
   // ---------- Writing prompts ----------
   const prompts = [
     "Describe the best thing that happened today in three sentences.",
@@ -1699,6 +1972,12 @@
     const baseW = single ? 794 : 794 * 2;
     let zoom = availW > 0 ? (availW - (single ? 6 : 14)) / baseW : 1;
     if (single) {
+      // While the in-book ➕ Add pane is open it shares the stage's flex row
+      // with the sheet — reserve its width so the page never overflows.
+      const pane = $("#bookAddPane");
+      if (pane && !pane.classList.contains("hidden")) {
+        zoom = Math.min(zoom, (availW * 0.5) / baseW);
+      }
       // .book-stage is flex:1 inside the column-layout .book-wrap on phones,
       // so its own clientHeight already IS the space left between the app bar
       // and the tab bar — fit the sheet height to it too (small breathing margin).
@@ -1706,7 +1985,9 @@
       const maxByH = availH > 80 ? availH / (794 * 297 / 210) : Infinity;
       zoom = Math.min(zoom, maxByH);
     }
-    zoom = Math.max(0.12, Math.min(1, zoom));
+    // Never shrink below a readable floor; on very short landscape screens
+    // allow going smaller instead of clipping the sheet off-screen.
+    zoom = Math.max(0.08, Math.min(1, zoom));
     bookEl.style.setProperty("--book-zoom", String(zoom));
   }
   window.addEventListener("resize", fitBookZoom);
@@ -1922,7 +2203,10 @@
     const pages = [];
     const raw = loadEntries();
     // sort by the entry's DATE field specifically (not array order), oldest first
-    const entries = raw.slice().sort((a, b) => {
+    // 📖 BOOK-VIEW FILTER: when a heading/sender is selected in the book's
+    // own filter bar, ONLY matching entries flow through the pages. Nothing
+    // selected (default "🗂 All") ⇒ every entry passes ⇒ the regular book.
+    const entries = raw.slice().filter(bookEntryMatchesFilter).sort((a, b) => {
       const ta = Date.parse(a && a.date != null ? a.date : 0) || 0;
       const tb = Date.parse(b && b.date != null ? b.date : 0) || 0;
       return ta - tb;
@@ -2791,6 +3075,7 @@
   }
 
   function renderSpread() {
+    updateBookAddBtn();   // ➕ Add tab appears only while a book filter is active
     const li = spread * 2;      // left page index
     const ri = spread * 2 + 1;  // right page index
     const lc = $("#leftContent"), rc = $("#rightContent");
@@ -3743,6 +4028,13 @@
     $("#bookOwner").textContent = "Private diary of " + getUserName() + " (" + currentUser + ")";
     const abs = $("#appBarSub");
     if (abs) abs.textContent = "🥛 " + getUserName() + "'s Diary";
+    // 📖 Refresh the book's own category/heading filter bar at the START of
+    // the book. It keeps whatever was selected last time the book was open
+    // in this session; when nothing is selected the book previews as regular.
+    renderBookFilterBar();
+    ensureBookAddControls();
+    updateBookAddBtn();
+    closeBookAddPane();
     bookModal.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     fitBookZoom();
@@ -3766,6 +4058,8 @@
   }
 
   function closeBook() {
+    bookAddOpen = false;
+    const pane = $("#bookAddPane"); if (pane) pane.classList.add("hidden");
     bookModal.classList.add("hidden");
     document.body.style.overflow = "";
   }

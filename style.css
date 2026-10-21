@@ -1529,3 +1529,84 @@ html.print-mode .page-flow { min-height: 100%; }
   .cr-num { font-size: 1.6rem; }
   .cr-sub { font-size: .66rem; }
 }
+
+/* ============ 📖 BOOK-VIEW CATEGORY / HEADING FILTER BAR ============ */
+/* Injected by script.js at the START of the book view, above the pages —
+   visible on desktop AND in phone mode. Chips filter which entries flow
+   through the booklet; "🗂 All" (the default) shows the regular book.     */
+.book-filter-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+  margin: 4px auto 10px; padding: 8px 12px; max-width: 1180px;
+  background: var(--card-bg, rgba(255,255,255,.7));
+  border: 1px solid var(--border, rgba(0,0,0,.12));
+  border-radius: 14px;
+}
+.bf-label { font-size: .78rem; font-weight: 700; opacity: .8; white-space: nowrap; }
+.bf-sep { width: 1px; align-self: stretch; background: var(--border, rgba(0,0,0,.14)); margin: 0 4px; }
+.bf-chip {
+  border: 1px solid var(--border, rgba(0,0,0,.12));
+  background: transparent; color: inherit; cursor: pointer;
+  border-radius: 999px; padding: 6px 11px;
+  font-size: .78rem; font-weight: 600; line-height: 1.2;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.bf-chip:hover { transform: translateY(-1px); }
+.bf-chip.active {
+  background: linear-gradient(135deg, #ff6b9d, #ff9a5a);
+  color: #fff; border-color: transparent;
+}
+.bf-chip-n {
+  display: inline-block; min-width: 1.4em; margin-left: 4px;
+  padding: 1px 6px; border-radius: 999px;
+  background: rgba(0,0,0,.10); font-size: .7rem; font-weight: 700;
+}
+.bf-chip.active .bf-chip-n { background: rgba(255,255,255,.25); }
+[data-theme="dark"] .book-filter-bar { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+[data-theme="dark"] .bf-chip { border-color: rgba(255,255,255,.16); }
+[data-theme="dark"] .bf-chip-n { background: rgba(255,255,255,.14); }
+
+/* The ➕ Add mini-editor pane — lives INSIDE the book stage so it is always
+   fully visible within the book view (never off-screen).                   */
+.book-add-pane {
+  flex: 0 0 320px; max-width: 340px; align-self: center;
+  margin-left: 14px; padding: 14px 16px;
+  background: var(--card-bg, rgba(255,255,255,.85));
+  border: 1px solid var(--border, rgba(0,0,0,.14));
+  border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+.book-add-pane.hidden { display: none; }
+.ba-title { margin: 0 0 8px; font-size: 1rem; }
+.ba-sub { display: block; font-size: .72rem; font-weight: 600; opacity: .75; margin-top: 2px; }
+.book-add-pane input, .book-add-pane textarea, .book-add-pane select {
+  width: 100%; box-sizing: border-box; margin-bottom: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--border, rgba(0,0,0,.16));
+  background: var(--input-bg, #fff); color: inherit; font: inherit; font-size: .85rem;
+}
+.book-add-pane textarea { min-height: 90px; resize: vertical; }
+.ba-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.ba-meta select { flex: 1 1 30%; min-width: 0; }
+.ba-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.ba-btns .btn { padding: 8px 12px; font-size: .8rem; }
+[data-theme="dark"] .book-add-pane { background: rgba(30,26,34,.95); border-color: rgba(255,255,255,.14); }
+[data-theme="dark"] .book-add-pane input, [data-theme="dark"] .book-add-pane textarea,
+[data-theme="dark"] .book-add-pane select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.18); color: #eee; }
+
+/* Phone mode: the filter bar hugs the screen edges and scrolls horizontally
+   so every chip stays reachable; the add pane shares the stage with the
+   sheet (fitBookZoom reserves half the width for it while open).           */
+@media (max-width: 820px) {
+  .book-filter-bar {
+    margin: 2px 4px 6px; padding: 6px 8px; border-radius: 10px;
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .book-filter-bar::-webkit-scrollbar { display: none; }
+  .bf-chip, .bf-label { flex: 0 0 auto; white-space: nowrap; }
+  .bf-sep { display: none; }
+  .book-stage { align-items: center; }
+  .book-add-pane {
+    flex: 0 0 55%; max-width: 55%; margin-left: 6px; padding: 10px 10px;
+    max-height: 96%; overflow-y: auto;
+  }
+}
