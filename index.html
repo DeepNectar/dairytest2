@@ -36,6 +36,7 @@
       <a href="#contact">Contact</a>
     </nav>
     <div class="nav-actions">
+      <button id="installBtn" class="btn btn-install btn-sm hidden" title="Install DairyWriting as an app on your phone or desktop">⬇️&nbsp;<span class="btn-txt-long">Install App</span></button>
       <button id="authBtn" class="btn btn-primary btn-sm">Sign In</button>
       <button id="userChip" class="user-chip hidden" title="Account menu">
         <span class="avatar" id="userAvatar">?</span><span id="userName"></span> ▾
@@ -379,6 +380,7 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
       <!-- ===== Phone app bottom tab bar (visible only in phone mode) ===== -->
       <nav class="app-tabbar" id="appTabbar">
         <button class="app-tab" id="tabPrev" type="button"><span class="app-tab-ic">‹</span><span class="app-tab-lbl">Prev</span></button>
+        <button class="app-tab" id="tabInstall" type="button" title="Install this app on your device"><span class="app-tab-ic">⬇️</span><span class="app-tab-lbl">Install</span></button>
         <span class="app-tab-page" id="spreadInfoPhone">Page 1 / 1</span>
         <button class="app-tab" id="tabSave" type="button"><span class="app-tab-ic">📌</span><span class="app-tab-lbl">Save</span></button>
         <button class="app-tab" id="tabPrint" type="button"><span class="app-tab-ic">🖨️</span><span class="app-tab-lbl">Print</span></button>
@@ -392,5 +394,95 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="script.js"></script>
+  <!-- PWA: register the offline service worker + wire up the Install App button.
+       Kept inline so it runs even if script.js is still loading. -->
+  <script>
+    (function () {
+      // --- Service worker (enables installability on Chromium browsers) ---
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("sw.js").catch(function (err) {
+            console.warn("SW registration failed:", err);
+          });
+        });
+      }
+
+      var installBtn = document.getElementById("installBtn");
+      var tabInstall = document.getElementById("tabInstall");
+      var deferredPrompt = null;
+      var iOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      var isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+
+      function setLabel(btn, txt) {
+        if (!btn) return;
+        var span = btn.querySelector(".btn-txt-long");
+        if (span) { span.textContent = txt.replace(/^[^\w]*\s*/, ""); }
+        else { btn.textContent = txt; }
+      }
+
+      // Already installed → nothing to do, hide the buttons.
+      if (isStandalone) {
+        if (installBtn) installBtn.classList.add("hidden");
+        if (tabInstall) tabInstall.classList.add("hidden");
+      }
+
+      // Android / desktop (Chromium): capture the native install prompt.
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn) { installBtn.classList.remove("hidden"); setLabel(installBtn, "⬇️ Install App"); }
+        if (tabInstall) { tabInstall.classList.remove("hidden"); }
+      });
+
+      window.addEventListener("appinstalled", function () {
+        deferredPrompt = null;
+        if (installBtn) installBtn.classList.add("hidden");
+        if (tabInstall) tabInstall.classList.add("hidden");
+        var t = document.getElementById("toast");
+        if (t) { t.textContent = "✅ App installed — look for DairyWriting on your home screen!"; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 2600); }
+      });
+
+      function showToastMsg(msg) {
+        var t = document.getElementById("toast");
+        if (!t) return;
+        t.textContent = msg; t.classList.add("show");
+        clearTimeout(t._dwTimer);
+        t._dwTimer = setTimeout(function () { t.classList.remove("show"); }, 3200);
+      }
+
+      function doInstall(btn) {
+        if (deferredPrompt) {                       // Android / desktop flow
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function (res) {
+            if (res.outcome === "accepted") {
+              setLabel(btn, "✅ Installing…");
+            } else {
+              showToastMsg("Install dismissed — you can try again anytime 🙂");
+            }
+            deferredPrompt = null;
+          });
+        } else if (iOS && !isStandalone) {          // iOS Safari manual flow
+          showToastMsg("📲 To install on iPhone/iPad: tap the Share button ⎋ then “Add to Home Screen”.");
+        } else {
+          showToastMsg("ℹ️ Use your browser menu → “Install app / Add to Home Screen”.");
+        }
+      }
+
+      if (installBtn) {
+        // On iOS there is no beforeinstallprompt — show the button anyway with
+        // the Share → Add to Home Screen guidance.
+        if (iOS && !isStandalone) {
+          installBtn.classList.remove("hidden");
+          setLabel(installBtn, "⬇️ Install App");
+        }
+        installBtn.addEventListener("click", function () { doInstall(installBtn); });
+      }
+      if (tabInstall) {
+        if (iOS && !isStandalone) tabInstall.classList.remove("hidden");
+        tabInstall.addEventListener("click", function () { doInstall(tabInstall); });
+      }
+    })();
+  </script>
 </body>
 </html>
