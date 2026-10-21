@@ -1376,6 +1376,51 @@ html.print-mode .entry-bubble .eb-heading-band { font-size: .68rem; line-height:
   /* the leaf animation anchors to the single sheet */
   body.book-phone-mode .leaf.flipping-forward { left: 0; }
 
+  /* ---- PHONE UPWARD NOTE-FLIP — FRONT SIDE ONLY ----
+     The page that is being turned away is a standalone clone of the CURRENT
+     sheet (the ghost). Only its FRONT face exists and animates — there is no
+     second face, so mirrored/back-side entries can NEVER flash during the
+     flip. It hinges on the TOP edge and rotates upward like a sticky-note pad. */
+  .book-stage { position: relative; }          /* anchor point for the ghost */
+  .phone-ghost {
+    position: absolute;
+    z-index: 30;
+    pointer-events: none;
+    margin: 0;
+    cursor: default;
+    transform-origin: center top;              /* hinge = top edge */
+    backface-visibility: hidden;               /* belt & braces: no back side */
+    will-change: transform;
+    box-shadow: 0 18px 40px rgba(60, 40, 10, .28);
+    border-radius: 6px;
+  }
+  .phone-ghost.phone-flip-up {
+    animation: phoneFlipUp .6s cubic-bezier(.35, .05, .35, 1) forwards;
+  }
+  .phone-ghost.phone-flip-down {
+    animation: phoneFlipDown .6s cubic-bezier(.35, .05, .35, 1) forwards;
+  }
+  @keyframes phoneFlipUp {
+    from { transform: rotateX(0deg); opacity: 1; }
+    70%  { opacity: 1; }
+    to   { transform: rotateX(-92deg) translateY(-6px); opacity: .18; }
+  }
+  @keyframes phoneFlipDown {
+    from { transform: rotateX(-92deg) translateY(-6px); opacity: .18; }
+    30%  { opacity: 1; }
+    to   { transform: rotateX(0deg); opacity: 1; }
+  }
+  /* while the ghost flies, the real book underneath stays hidden so nothing
+     of the old spread (or any leaf back face) peeks through */
+  .book.phone-sheet-hidden { visibility: hidden; }
+  /* honour reduced-motion: no rotation, just a quick fade swap */
+  @media (prefers-reduced-motion: reduce) {
+    .phone-ghost.phone-flip-up, .phone-ghost.phone-flip-down {
+      animation: phoneFade .3s ease forwards;
+    }
+    @keyframes phoneFade { from { opacity: 1; } to { opacity: 0; } }
+  }
+
   /* swipe-only: kill the desktop "click the page to flip" affordance */
   body.book-phone-mode .page { cursor: default; }
 
