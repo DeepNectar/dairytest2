@@ -3107,6 +3107,13 @@
   }
 
   function renderSpread() {
+    // A flip animation in flight belongs ONLY to the desktop spread it was
+    // started on. If the reader resizes/rotates into phone mode mid-flip, the
+    // pending timeout would later strip the leaf classes from a hidden element
+    // and `flipping` could stay stuck true — permanently blocking plain page
+    // turns on the phone. Reset the flight state whenever we re-render.
+    flipping = false;
+    if (leafEl) leafEl.classList.remove("flipping-forward", "flipping-back");
     updateBookAddBtn();   // ➕ Add tab appears only while a book filter is active
     // On phones every numbered page (1, 2, 3 …) gets its OWN screen, so the
     // phone "spread" counter must never be clamped to the desktop sheet count
@@ -3966,6 +3973,10 @@
     // tabs all route through here; everything else (pagination, numbering,
     // save/print) behaves exactly as before.
     if (isPhoneBook()) {
+      // The phone counter walks EVERY numbered page (1..N), NOT the desktop
+      // sheet count — bookPages may carry trailing blank padding sheets that
+      // must never become extra "pages" on the phone. Same lastIdx maths as
+      // renderSpread(), so the guard and the pager can never disagree.
       const lastIdx = bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1);
       const totalPages = Math.max(1, lastIdx + 1);   // pages 1..N on phones
       if (dir === "next" && spread >= totalPages - 1) return;
