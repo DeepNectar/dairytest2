@@ -66,7 +66,10 @@
         <a href="#about" class="btn btn-ghost">Learn More</a>
       </div>
       <div class="stats">
-        <div class="stat"><strong id="statEntries">0</strong><span>Entries</span></div>
+        <!-- 🧮 MESSAGE COUNTER: counts the MESSAGES only (one saved entry = one
+             message). It is a separate counter — it never prints an "entry #N"
+             number inside the diary book or on the cards. -->
+        <div class="stat" title="Separate counter — counts your messages only; no numbering appears in the book"><strong id="statEntries">0</strong><span>Messages counted</span></div>
         <div class="stat"><strong id="statWords">0</strong><span>Words written</span></div>
         <div class="stat"><strong id="statStreak">0</strong><span>Day streak</span></div>
       </div>
@@ -166,7 +169,7 @@ A normal day that became precious because she was in it. Morning greetings,
 busy afternoons, her dreams and my waiting — every line pulled us closer.
 
 ========================================</pre>
-      <p class="template-note"><strong>Entry numbers:</strong> every <code>- Message: [date]</code> line may start with a running number — <code>#1 - Message: …</code>, <code>1. - Message: …</code> or <code>(1) - Message: …</code> — counted <strong>1, 2, 3 … till the end</strong> across all headings and days. Only the <code>Message: [12 January 2026, 08:15 AM] …</code> lines are counted; the <code>What I felt:</code> / <code>Note:</code> lines belong to the message above them and never get their own number. The number is just a label for checking big sheets — it is stripped before import and never stored in Supabase.<br /><strong>All 15 headings are supported.</strong> Use only the heading sections that have content — messages under each <code>####</code> heading are automatically filed there. Skip the headings and they'll still be auto-detected from keywords. The <code>📌 FINAL SUMMARY</code> block is saved as its own summary page in the booklet.</p>
+      <p class="template-note"><strong>🧮 Entry counting (separate counter):</strong> the app counts your messages in its own counter — the hero stat <em>“Messages counted”</em> and the live <em>“N messages counted”</em> chip under the editor. Numbering is NOT part of the diary: you may write <code>#1 - Message: …</code>, <code>1. - Message: …</code> or <code>(1) - Message: …</code> on big sheets, but those numbers are stripped before import and <strong>never appear inside the book, on the cards, or in Supabase</strong>. Only the <code>Message: [12 January 2026, 08:15 AM] …</code> lines are counted as entries; the <code>What I felt:</code> / <code>Note:</code> lines belong to the message above them and never get their own number.<br /><strong>All 15 headings are supported.</strong> Use only the heading sections that have content — messages under each <code>####</code> heading are automatically filed there. Skip the headings and they'll still be auto-detected from keywords. The <code>📌 FINAL SUMMARY</code> block is saved as its own summary page in the booklet.</p>
       <button class="btn btn-ghost btn-sm" id="copyTemplateBtn" type="button">📋 Copy Template</button>
     </div>
 
