@@ -488,10 +488,18 @@
   const bodyInput = $("#entryBody");
   const liveCount = $("#liveCount");
   function updateLiveEntryCount() {
-    const typed = countWords(bodyInput.value) > 0 ? 1 : 0;   // what is being written right now
-    liveCount.textContent = (computeMessageCount().realCount + typed) + " entries counted";
+    const typedWords = countWords(bodyInput.value);              // words being written right now
+    const typed = typedWords > 0 ? 1 : 0;                        // the draft counts as one live entry
+    // 🧮 The running WORD total deliberately EXCLUDES the 📌 FINAL SUMMARY
+    // entry onward — same rule as the message count. If you want the summary
+    // counted too, it continues on the OTHER side of the calculator (the
+    // 🧮 Message Counter panel's second card), never in this line.
+    const c = computeMessageCount();
+    liveCount.textContent = (c.realCount + typed) + " entries counted, " +
+      (c.realWords + typedWords).toLocaleString() + " words written";
   }
   bodyInput.addEventListener("input", updateLiveEntryCount);
+
 
   // ---------- Save entry ----------
   const form = $("#entryForm");
@@ -2465,8 +2473,23 @@
     const occupied = [];                                // text-line rects (layout px)
     const pagesOut = [];
     const newPage = () => {
-      if (cur) pagesOut.push({ html: cur, occ: occupied.slice() });
+      // ALWAYS commit the current page — even when it holds no HTML text.
+      // The cover hero paints its sheet through inline-styled divs, and a
+      // flow that breaks right after an append can leave `cur` momentarily
+      // "empty-looking"; dropping such pages used to shift every following
+      // sheet's number and left blank-looking pages in the spread ("some
+      // pages not showing the entry preview"). Page indices must stay
+      // contiguous so numbers 1,2,3… run to the end on screen AND print.
+      pagesOut.push({ html: cur, occ: occupied.slice() });
       cur = ""; cursorY = padT; occupied.length = 0;
+    };
+
+    // Drop trailing EMPTY pages (pages with no content) from the END of the
+    // flow — they would only add blank sheets after the last real page.
+    const trimTrailingEmptyPages = () => {
+      while (pagesOut.length > 1 && !String(pagesOut[pagesOut.length - 1].html).trim()) {
+        pagesOut.pop();
+      }
     };
 
     // Render `html` into the measuring host AT THE CURRENT CURSOR (the host
@@ -3039,7 +3062,7 @@
       // below the page edge. The cover hero additionally starts on its own
       // fresh sheet (page 1) so the title block sits properly as a cover.
       const h = measureBlockHTML(b.html);
-      if (b.coverHero && !cur) {
+      if (b.coverHero && !cur && !pagesOut.length) {
         // first block of the book → dedicated cover sheet starting at the top
         appendFlow(b.html);
         continue;
@@ -3054,6 +3077,10 @@
     // final page: decorate its remaining empty rows
     if (cur) cur += emitSlots();
     newPage();
+
+    // never leave dangling blank sheets AFTER the last real page — they made
+    // the print booklet show empty pages and broke the "…till the end" count
+    trimTrailingEmptyPages();
 
     return pagesOut;
   }
@@ -3383,6 +3410,9 @@
     //    web-font metrics differ between windows.
     const pages = bookPages.slice();
     const printSeed = Date.now().toString(36);
+    // booklet-wide zoom used when a page's text overflows its A4 sheet (the
+    // fit pass re-flows EVERYTHING at this scale so no page is torn in half)
+    let printFlowZoom = 1;
     {
       const win = window.open("", "_blank");
       if (!win) { showToast("Pop-up blocked — allow pop-ups to print 🖨️"); return; }
@@ -3416,6 +3446,26 @@
         if (!pages[i]) continue;                    // blank padding page
         body += mkSheet(pages[i], i + 1);
       }
+      // Rebuild the WHOLE booklet body inside the already-open print window.
+      // Used by the overflow safety net: instead of surgically moving DOM
+      // nodes between cloned sheets (which tore the layout and skipped entry
+      // previews), the entire flow is re-paginated from the same blocks at a
+      // slightly smaller zoom and written fresh — every page then fills
+      // properly and numbers run 1, 2, 3 … to the end without gaps.
+      const rebuildPrintBooklet = (D) => {
+        const z = printFlowZoom;
+        const zAttr = (z && Math.abs(z - 1) > 0.001)
+          ? ' style="zoom:' + z + '"' : "";
+        let html = "";
+        for (let i = 0; i < pages.length; i++) {
+          if (!pages[i]) continue;                  // blank padding page
+          html += mkSheet(
+            zAttr ? pages[i].replace('<div class="page-flow">', '<div class="page-flow" style="zoom:' + z + '">') : pages[i],
+            i + 1);
+        }
+        D.body.innerHTML = html;
+        void D.body.offsetWidth;                    // force layout before measuring
+      };
       // The app stylesheet is imported for fidelity, AND the same rules are
       // also embedded inline (PRINT_WIN_CSS) so the standard row/line sizes
       // apply even if the linked file cannot be fetched in the pop-up.
@@ -3713,22 +3763,24 @@
         const D = win.document;
         let fixedAny = false, pass = 0;
         while (pass++ < 12) {
+          // RE-PAGINATE THE WHOLE BOOKLET FROM SCRATCH every pass. Cloning a
+          // sheet and moving DOM nodes across it used to tear the layout:
+          // half-empty pages, missing entry previews and wrong page numbers
+          // in the printed PDF ("print page not coming out properly"). Now
+          // each pass measures EVERY sheet against the usable area; if any
+          // content hangs below its bottom edge, the ENTIRE booklet is
+          // re-flowed from the same blocks at a slightly smaller zoom and
+          // rebuilt — so all pages fill correctly and numbers always run
+          // 1, 2, 3 … to the end.
           const sheets = Array.from(D.querySelectorAll(".print-sheet"));
-          if (!sheets.length) break;
-          // usable bottom edge of a sheet = top of its footer band
-          const refSheet = sheets[0];
-          const sRect = refSheet.getBoundingClientRect();
-          if (sRect.width < 100) break;                 // not laid out yet
-          // usable bottom edge of a sheet = top of its footer band minus the
-          // reserved margin (5 empty last rows) — the SAME geometry the
-          // paginator flowed with: .page-inner has NO bottom padding, so the
-          // text area runs from pad-t below the header all the way down to
-          // the footer band; availH subtracts the last 5 ruled rows.
+          if (!sheets.length) break;                 // not laid out yet
+          const sRect = sheets[0].getBoundingClientRect();
+          if (sRect.width < 100) break;              // not laid out yet
           const headH = PRINT_HEAD_H, footH = PRINT_FOOT_H, row = PRINT_ROW, padT = PRINT_PAD_T;
           const innerH = sRect.height - headH - footH - padT;   // .page-inner content height
           const availH = innerH - row * PRINT_LAST_EMPTY_ROWS;  // == PRINT_USABLE_H_PX
           const maxBottomLocal = availH;                        // relative to .page-content top
-          let target = null, worstOver = 0;
+          let worstOver = 0;
           for (const sheet of sheets) {
             const pc = sheet.querySelector(".page-content");
             if (!pc) continue;
@@ -3742,56 +3794,20 @@
               if (r.height > 0 && r.bottom > lowest) lowest = r.bottom;
             });
             const over = lowest - limit;
-            if (over > 2 && over > worstOver) { worstOver = over; target = { sheet, pc, inner, pRect, limit }; }
+            if (over > 2 && over > worstOver) worstOver = over;
           }
-          if (!target) break;                           // everything fits ✓
-          // collect the direct children of this sheet's flow in visual order
-          const kids = Array.from(target.inner.children).filter(n =>
-            n.nodeType === 1 && !n.classList.contains("sticker-slot") &&
-            !n.classList.contains("page-sticker"));
-          if (!kids.length) break;
-          // find the FIRST block that still starts fully inside the usable
-          // area; everything from the first block crossing the bottom edge
-          // onward moves down to the next page. If even the first block
-          // crosses the limit, keep it where it is (a lone over-tall block
-          // cannot be helped by moving — the paginator already line-split
-          // anything taller than a sheet).
-          let cutIdx = kids.length;
-          for (let i = 0; i < kids.length; i++) {
-            const r = kids[i].getBoundingClientRect();
-            if (r.height > 0 && r.bottom > target.limit + 2) { cutIdx = i; break; }
+          if (!worstOver) break;                      // everything fits ✓
+          // pick the next smaller zoom step that could plausibly fix the
+          // overflow (content is ~1 + over/usable taller than the sheet)
+          const needed = 1 / (1 + worstOver / Math.max(60, maxBottomLocal));
+          let nz = ZOOM_STEPS[ZOOM_STEPS.length - 1];
+          for (let zi = 0; zi < ZOOM_STEPS.length; zi++) {
+            if (ZOOM_STEPS[zi] <= printFlowZoom + 0.0001 && ZOOM_STEPS[zi] <= needed) { nz = ZOOM_STEPS[zi]; break; }
+            if (ZOOM_STEPS[zi] <= needed) { nz = ZOOM_STEPS[zi]; break; }
           }
-          if (cutIdx === 0) cutIdx = kids.length;       // nothing movable
-          const movers = kids.slice(cutIdx);
-          if (!movers.length) break;
-          // strip the old slot marker + stickers from this sheet; they get
-          // re-reserved on the pages by the fresh measurements below
-          target.pc.querySelectorAll(".sticker-slot, .page-sticker").forEach(n => n.remove());
-          const mkFlow = (nodes) => {
-            const f = D.createElement("div");
-            f.className = "page-flow";
-            nodes.forEach(n => f.appendChild(n));       // moves the DOM node
-            return f;
-          };
-          const movedHTML = mkFlow(movers);
-          // build a brand-new sheet carrying the overflow ("balance goes on
-          // the next page"), inserted directly AFTER the current one
-          const newSheet = target.sheet.cloneNode(false);
-          const hdr = target.sheet.querySelector(".book-page-header");
-          const ftr = target.sheet.querySelector(".book-page-footer");
-          if (hdr) newSheet.appendChild(hdr.cloneNode(true));
-          const pi = D.createElement("div"); pi.className = "page-inner";
-          const pcon = D.createElement("div"); pcon.className = "page-content";
-          pcon.appendChild(movedHTML);
-          pi.appendChild(pcon);
-          newSheet.appendChild(pi);
-          if (ftr) newSheet.appendChild(ftr.cloneNode(true));
-          target.sheet.parentNode.insertBefore(newSheet, target.sheet.nextSibling);
-          // the remaining space on the ORIGINAL sheet now gets a freshly
-          // measured empty slot for its sticker (right-hand side, sized to
-          // the actual free area left behind)
-          reserveSlot(target.pc);
-          reserveSlot(pcon);
+          if (!(nz < printFlowZoom - 0.0005)) break;  // no smaller step left — stop
+          printFlowZoom = nz;
+          rebuildPrintBooklet(D);                     // full re-flow at the new zoom
           fixedAny = true;
         }
         if (fixedAny) renumberSheets();
