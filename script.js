@@ -3177,12 +3177,13 @@
   }
 
   // ---------- Book: reading position (session-only, NEVER stored on device) ----------
-  // The book ALWAYS opens at page 1 and rebuilds itself from the source code
-  // + cloud data on every single open — nothing about the book is cached or
-  // saved locally (no localStorage / sessionStorage / IndexedDB anywhere).
-  // "Save" only writes the bookmark row to the Supabase cloud (visible on
-  // every device); it never touches local storage, and a plain refresh of
-  // the page always re-renders exactly what the current code produces.
+  // The book rebuilds itself from the source code + cloud data on every
+  // single open — nothing about the book is cached or saved locally (no
+  // localStorage / sessionStorage / IndexedDB anywhere).
+  // "📌 Save" writes the bookmark row to the Supabase cloud (visible on
+  // every device); it never touches local storage. When the book is opened
+  // again the bookmark is fetched fresh from the cloud and the reader lands
+  // DIRECTLY on the saved page — resuming exactly where they pinned it.
   async function loadSavedSpreadFromCloud() {
     if (!currentUser) { savedSpreadCloud = 0; return; }
     try {
@@ -4081,13 +4082,22 @@
       fitBookZoom();
       requestAnimationFrame(async () => {
       bookPages = await buildBookPages();
-      // 🔄 ALWAYS start at page 1 and rebuild strictly from the current code
-      // + cloud data on every open — no reading position or book state is
-      // ever saved locally, so a refresh always shows exactly what the code
-      // produces. (The 📌 Save button still bookmarks to the cloud; it just
-      // never auto-jumps on open.)
-      spread = 0;
+      // 📌 RESUME AT THE SAVED PAGE: fetch the bookmark fresh from the cloud
+      // (never from device storage) and jump straight to it, so reopening the
+      // diary opens exactly the page that was pinned/saved last time. If no
+      // bookmark exists — or the book got shorter than the bookmark — the
+      // reader starts at page 1 instead.
+      try {
+        const rows = await syncGet("settings", "select=value&owner=eq." + encodeURIComponent(currentUser.toLowerCase()) + "&key=eq.book_page");
+        const v = rows && rows.length ? parseInt(rows[0].value, 10) : 0;
+        savedSpreadCloud = isNaN(v) || v < 0 ? 0 : v;
+      } catch (e) { savedSpreadCloud = 0; /* cloud unreachable → start at page 1 */ }
+      const totalSheets = Math.max(1, bookPages.length);
+      spread = (savedSpreadCloud > 0 && savedSpreadCloud < totalSheets) ? savedSpreadCloud : 0;
       renderSpread();
+      if (spread > 0) {
+        showToast("🔖 Resumed at page " + (spread + 1) + " — where you left off ✨");
+      }
       });
     });
   }
