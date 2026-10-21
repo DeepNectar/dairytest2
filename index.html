@@ -344,7 +344,9 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
               <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
             </div>
           </div>
-          <!-- Flipping leaf (animated) -->
+          <!-- Flipping leaf (animated) — DESKTOP SPREAD ONLY. The back face
+               is intentionally EMPTY: it stays blank plain paper, so no entry
+               can ever appear on the reverse side of a sheet. -->
           <div class="leaf" id="leaf">
             <div class="leaf-face leaf-front" id="leafFront">
               <div class="book-page-header">
@@ -357,16 +359,10 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
                 <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
               </div>
             </div>
-            <div class="leaf-face leaf-back" id="leafBack">
-              <div class="book-page-header">
-                <img class="bph-photo bph-photo-left" src="https://lh3.googleusercontent.com/d/17_Wt5nHtKbuDc7DiynDexI-l-GY8RpgS" alt="Soulmate Code" referrerpolicy="no-referrer" draggable="false">
-                <div class="bph-title">💕 OUR LOVE STORY 💕</div>
-              </div>
-              <div class="page-content"></div>
-              <div class="book-page-footer">
-                <span class="page-num"></span>
-                <img class="love-stamp" src="https://lh3.googleusercontent.com/d/1xT4SnUR8dtEHP14MUMFZnYZnumAS96Fw" alt="Our Love stamp" referrerpolicy="no-referrer" draggable="false">
-              </div>
+            <div class="leaf-face leaf-back" id="leafBack" aria-hidden="true">
+              <!-- FRONT-SIDE-ONLY WRITING: this back face carries NO header,
+                   NO page content and NO footer — just plain paper. Entries
+                   are rendered exclusively on the front side. -->
             </div>
           </div>
           <div class="book-spine"></div>
@@ -389,7 +385,7 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
         <button class="app-tab" id="tabPrint" type="button"><span class="app-tab-ic">🖨️</span><span class="app-tab-lbl">Print</span></button>
         <button class="app-tab" id="tabNext" type="button"><span class="app-tab-ic">›</span><span class="app-tab-lbl">Next</span></button>
       </nav>
-      <p class="book-hint">Tip: this is a portrait flip-up diary — pages turn UPWARD at the top binding. Click the right page to flip up forward, the left page to bring one back down. Use ← → arrow keys too.</p>
+      <p class="book-hint">Tip: on large screens this is a portrait flip-up diary — pages turn UPWARD at the top binding and writing lives only on the front side (backs stay blank paper). Click the right page to flip up forward, the left page to bring one back down; ← → arrows work too. On phones it is NOT a book: every screen shows ONE single page with all entries on the front view only — swipe up/down, tap, or use Prev/Next.</p>
     </div>
   </div>
 
