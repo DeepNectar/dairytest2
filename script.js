@@ -4354,6 +4354,20 @@
     return trimEntryLines(keep + "\n…");
   }
 
+  // Compact-trim ALL THREE data parts of an entry — the message, the 💭 felt
+  // text and the 📝 note alike — through the SAME one rule (trimEntryLines):
+  // blank lines, dash-only separators and doubled inner spaces are removed
+  // from every part. Shared by the book/preview renderer
+  // (formatBookBodyHtml) and the PDF path so both pack entries identically.
+  // Returns { main, felt, note } as arrays of clean, trimmed lines.
+  function compactEntryParts(mainText, feltText, noteText) {
+    return {
+      main: trimEntryLines(mainText),
+      felt: trimEntryLines(feltText),
+      note: trimEntryLines(noteText),
+    };
+  }
+
   // ---------- Canonical stored-body shape (SINGLE SOURCE OF TRUTH) ----------
   // An entry's body is ALWAYS stored as plain text in one canonical shape:
   //   Sender: "message"
