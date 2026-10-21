@@ -7,6 +7,31 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  // ---------- 📂 The 15 diary categories (headings) ----------
+  // Defined at the TOP of the script so BOTH the manual entry form and
+  // the template importer share one source of truth. script.js injects
+  // these as options into the editor (no index.html changes needed).
+  // heading travels with the entry to the Supabase "entries" table (column
+  // "heading") and shows up as a coloured band on the message bubble in the
+  // book / PDF, so each section of the diary is visible at a glance.
+  const DIARY_HEADINGS = [
+    { id: "greetings",   label: "🌅 Morning & Night Greetings",     keywords: ["good morning","gm","gn","good night","goood morning","gud night","morning jaan","night jaan","slept","sleep well","did you sleep","wakeup","wake up","first thing"] },
+    { id: "daily-life",  label: "💬 Daily Life & Important Updates", keywords: ["office","work","job","meeting","study","college","school","eat","ate","food","lunch","dinner","breakfast","tea","coffee","today","tomorrow","plan for today","busy","tired from","reached","home","gym","drive","shopping","chore"] },
+    { id: "compliments", label: "💖 Sweet Compliments & Love",       keywords: ["beautiful","pretty","cute","gorgeous","lovely","smart","amazing girl","best girl","your eyes","your smile","so special","miss your face","patachu","supadu","marvelous"] },
+    { id: "kesha",       label: "👨‍👩‍👧‍👦 About Kesha (Her Sister)",      keywords: ["kesha","keshu","sister","akshi","behen","behno"] },
+    { id: "arya",        label: "👨‍👩‍👧‍👦 About Arya (Her Brother)",       keywords: ["arya","bhai","brother","भाi"] },
+    { id: "dreams",      label: "🎯 Dreams & Future Plans",          keywords: ["future","plan","plans","engagement","wedding","shadi","marriage","settled","together forever","visa","flight","move","dubai plan","april","our home","kids","family plan","dream","goal"] },
+    { id: "support",     label: "🤗 Emotional Support & Care",       keywords: ["take care","tension","stress","worried","worry","therapy","panic","depression","sad","cry","crying","upset","hurt","health","father","hospital","support","calm down","don't think","it's okay","safe","protect"] },
+    { id: "fun",         label: "😄 Fun Moments & Jokes",            keywords: ["haha","lol","😂","🤣","joke","funny","bakwas","natak","drama","prank","crazy dream","story","mast","have to say"] },
+    { id: "flirty",      label: "🔥 Flirty Banter & Teasing",        keywords: ["tease","teasing","na na khoon","kill you","jujhu","patamu","jealous","miss me huh","say it again","catch you","you mine","i am yours only","banter","flirt"] },
+    { id: "confessions", label: "💕 Romantic Confessions",           keywords: ["love you","ilu","i love","luv u","heart","my jaan","jaanu","honeymoon","forever","only you","always yours","proposing","will you marry","relationship","commitment"] },
+    { id: "attraction",  label: "💘 Attraction & Desire",            keywords: ["attractive","desire","want you","need you","craving","miss you so much","can't wait to see","hold you","hug you tight","hold your hand","meet","come here"] },
+    { id: "intimate",    label: "🌙 Intimate & Passionate Talks",    keywords: ["kiss","👄","🫦","passionate","intimate","spicy","private talk","bed","romantic night","physical","skin","cuddle","clingy night"] },
+    { id: "chemistry",   label: "💝 Deep Chemistry & Connection",    keywords: ["connection","chemistry","same feeling","telepath","souls","two bodies one soul","understand you without","finish my sentences","meant to be","destiny","twin flame","soulmate"] },
+    { id: "no-reply",    label: "💭 My Messages To Her (No Reply Yet)", keywords: [] },
+    { id: "her-only",    label: "💌 Her Messages To Me",             keywords: [] },
+  ];
+
   // ---------- Sync backend (cloud storage) ----------
   // Everything — accounts, sessions, diary entries and the saved book page —
   // lives in the cloud tables ONLY. Nothing is kept on the device.
@@ -247,8 +272,23 @@
         : 0
     };
   }
+  // The counter panel's markup is injected by script.js itself (no changes
+  // needed in index.html): make sure the container exists before filling it.
+  function ensureCounterPanel() {
+    let box = $("#counterResults");
+    if (box) return box;
+    const formEl = $("#entryForm");
+    if (!formEl || !formEl.parentNode) return null;
+    const panel = document.createElement("div");
+    panel.className = "counter-panel";
+    panel.innerHTML =
+      '<h4 class="cr-title">🧮 Message Counter <span class="cr-note">(counting only — never numbers the book)</span></h4>' +
+      '<div id="counterResults"></div>';
+    formEl.parentNode.insertBefore(panel, formEl.nextSibling);
+    return $("#counterResults");
+  }
   function renderCounterPanel() {
-    const box = $("#counterResults");
+    const box = ensureCounterPanel();
     if (!box) return;
     const c = computeMessageCount();
     box.innerHTML =
@@ -461,6 +501,30 @@
     return r ? r.value : "Deep";
   }
 
+  // 📂 CATEGORY / HEADING OPTION AT THE START OF THE BOOK:
+  // script.js injects a "Category" dropdown into the editor's meta row — the
+  // 15 diary headings plus an auto-detect default. Entries saved with a
+  // category are filed under that heading, and the preview chips at the top
+  // of the entries section then show ONLY the entries matching the selected
+  // heading. Nothing had to be added to index.html for this.
+  function ensureHeadingSelect() {
+    let sel = $("#entryHeading");
+    if (sel) return sel;
+    const meta = document.querySelector(".editor-meta");
+    if (!meta) return null;
+    sel = document.createElement("select");
+    sel.id = "entryHeading";
+    sel.title = "Category / heading — the preview filter shows only entries matching the selected heading";
+    sel.innerHTML =
+      '<option value="">📂 Auto-detect category</option>' +
+      DIARY_HEADINGS.map((h) => '<option value="' + escapeHtml(h.label) + '">' + escapeHtml(h.label) + "</option>").join("");
+    const moodSel = $("#entryMood");
+    if (moodSel && moodSel.parentNode === meta) meta.insertBefore(sel, moodSel);
+    else meta.appendChild(sel);
+    return sel;
+  }
+  ensureHeadingSelect();
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!currentUser) {
@@ -472,6 +536,10 @@
     const body = bodyInput.value.trim();
     const mood = $("#entryMood").value;
     const sender = getSelectedSender();
+    // 📂 chosen category — or auto-detected from the message text when the
+    // user leaves the dropdown on "Auto-detect".
+    const headingSel = $("#entryHeading");
+    const heading = (headingSel && headingSel.value) || detectHeading(body, sender);
     if (!title || !body) {
       showToast("Please add a title and some words 🐄");
       return;
@@ -483,6 +551,7 @@
       body,
       mood,
       sender, // message belongs ONLY to the person chosen — never mixed up
+      heading, // filed under this category → the preview chips filter by it
       date: new Date().toISOString(),
       words: countWords(body)
     });
@@ -532,6 +601,11 @@
     if (!currentUser) {
       emptyEl.textContent = "🔒 Private area — please Sign In to view your diary.";
       emptyEl.classList.add("locked");
+    } else if (entries.length === 0 && activeHeadingFilter) {
+      // Category selected but nothing filed under it yet — say so clearly
+      // instead of the generic "no entries" message.
+      emptyEl.textContent = "📂 No entries under “" + activeHeadingFilter + "” yet — pick 🗂 All or file a message here from the editor’s Category dropdown.";
+      emptyEl.classList.remove("locked");
     } else {
       emptyEl.textContent = "No entries yet — your first page is waiting. ✨ (click here to sign in as another user)";
       emptyEl.classList.remove("locked");
@@ -708,8 +782,27 @@
     });
     return map;
   }
+  // The chip row is injected by script.js itself (no index.html change
+  // needed): it sits at the START of the entries preview, right above the
+  // search toolbar.
+  function ensureHeadingChipRow() {
+    let wrap = $("#headingChips");
+    if (wrap) return wrap;
+    const toolbar = document.querySelector(".entries-toolbar");
+    const section = toolbar ? toolbar.parentNode : $("#entriesList") && $("#entriesList").parentNode;
+    if (!section) return null;
+    wrap = document.createElement("div");
+    wrap.id = "headingChips";
+    wrap.className = "heading-chips";
+    wrap.setAttribute("role", "tablist");
+    wrap.setAttribute("aria-label", "Filter entries by heading / category");
+    if (toolbar) section.insertBefore(wrap, toolbar);
+    else section.insertBefore(wrap, section.firstChild);
+    wireHeadingChipClicks(wrap);
+    return wrap;
+  }
   function renderHeadingChips() {
-    const wrap = $("#headingChips");
+    const wrap = ensureHeadingChipRow();
     if (!wrap) return;
     const counts = headingCounts();
     const keys = Object.keys(counts).sort((a, b) =>
@@ -724,13 +817,18 @@
       chip("🗂 All", "", total) +
       keys.map((k) => chip(k, k, counts[k])).join("");
   }
-  $("#headingChips").addEventListener("click", (e) => {
-    const btn = e.target.closest(".h-chip");
-    if (!btn) return;
-    activeHeadingFilter = btn.dataset.heading || "";
-    renderHeadingChips();
-    renderEntries();
-  });
+  function wireHeadingChipClicks(wrap) {
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest(".h-chip");
+      if (!btn) return;
+      activeHeadingFilter = btn.dataset.heading || "";
+      renderHeadingChips();
+      renderEntries();
+    });
+  }
+  // If the row already exists in the page markup, wire it up immediately.
+  const existingChipRow = $("#headingChips");
+  if (existingChipRow) wireHeadingChipClicks(existingChipRow);
 
   // ---------- Writing prompts ----------
   const prompts = [
@@ -3740,28 +3838,6 @@
   const CHOTA_NAME = "🫰🫶🏻Chota Don❣️❤️😘"; // exact sender name for her messages
 
   // ---------- Message text helpers ----------
-  // ---------- Diary headings (COMPLETE DIARY booklet format) ----------
-  // Every imported message is filed under ONE of these 15 headings. The
-  // heading travels with the entry to the Supabase "entries" table (column
-  // "heading") and shows up as a coloured band on the message bubble in the
-  // book / PDF, so each section of the diary is visible at a glance.
-  const DIARY_HEADINGS = [
-    { id: "greetings",   label: "🌅 Morning & Night Greetings",     keywords: ["good morning","gm","gn","good night","goood morning","gud night","morning jaan","night jaan","slept","sleep well","did you sleep","wakeup","wake up","first thing"] },
-    { id: "daily-life",  label: "💬 Daily Life & Important Updates", keywords: ["office","work","job","meeting","study","college","school","eat","ate","food","lunch","dinner","breakfast","tea","coffee","today","tomorrow","plan for today","busy","tired from","reached","home","gym","drive","shopping","chore"] },
-    { id: "compliments", label: "💖 Sweet Compliments & Love",       keywords: ["beautiful","pretty","cute","gorgeous","lovely","smart","amazing girl","best girl","your eyes","your smile","so special","miss your face","patachu","supadu","marvelous"] },
-    { id: "kesha",       label: "👨‍👩‍👧‍👦 About Kesha (Her Sister)",      keywords: ["kesha","keshu","sister","akshi","behen","behno"] },
-    { id: "arya",        label: "👨‍👩‍👧‍👦 About Arya (Her Brother)",       keywords: ["arya","bhai","brother","भाi"] },
-    { id: "dreams",      label: "🎯 Dreams & Future Plans",          keywords: ["future","plan","plans","engagement","wedding","shadi","marriage","settled","together forever","visa","flight","move","dubai plan","april","our home","kids","family plan","dream","goal"] },
-    { id: "support",     label: "🤗 Emotional Support & Care",       keywords: ["take care","tension","stress","worried","worry","therapy","panic","depression","sad","cry","crying","upset","hurt","health","father","hospital","support","calm down","don't think","it's okay","safe","protect"] },
-    { id: "fun",         label: "😄 Fun Moments & Jokes",            keywords: ["haha","lol","😂","🤣","joke","funny","bakwas","natak","drama","prank","crazy dream","story","mast","have to say"] },
-    { id: "flirty",      label: "🔥 Flirty Banter & Teasing",        keywords: ["tease","teasing","na na khoon","kill you","jujhu","patamu","jealous","miss me huh","say it again","catch you","you mine","i am yours only","banter","flirt"] },
-    { id: "confessions", label: "💕 Romantic Confessions",           keywords: ["love you","ilu","i love","luv u","heart","my jaan","jaanu","honeymoon","forever","only you","always yours","proposing","will you marry","relationship","commitment"] },
-    { id: "attraction",  label: "💘 Attraction & Desire",            keywords: ["attractive","desire","want you","need you","craving","miss you so much","can't wait to see","hold you","hug you tight","hold your hand","meet","come here"] },
-    { id: "intimate",    label: "🌙 Intimate & Passionate Talks",    keywords: ["kiss","👄","🫦","passionate","intimate","spicy","private talk","bed","romantic night","physical","skin","cuddle","clingy night"] },
-    { id: "chemistry",   label: "💝 Deep Chemistry & Connection",    keywords: ["connection","chemistry","same feeling","telepath","souls","two bodies one soul","understand you without","finish my sentences","meant to be","destiny","twin flame","soulmate"] },
-    { id: "no-reply",    label: "💭 My Messages To Her (No Reply Yet)", keywords: [] },
-    { id: "her-only",    label: "💌 Her Messages To Me",             keywords: [] },
-  ];
 
   // Auto-detect the best heading for a message by counting keyword hits in
   // its text (message + felt lines). Falls back to the sender-based default.
