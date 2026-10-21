@@ -1937,13 +1937,14 @@
   let flipping = false;
 
   // ---- PHONE MODE: ONE PAGE PER SCREEN, ALWAYS ----
-  // Below the phone breakpoint the book is ALWAYS a single-page note-style
-  // reader — every numbered page (1, 2, 3 … to the end) gets its own screen
-  // and turns with the upward sheet-flip animation. This applies even when
-  // the book modal was opened on a larger screen and the window/device was
-  // then resized down: the view re-renders itself into phone mode instantly.
+  // THE BOOK IS ALWAYS A SINGLE-PAGE FLIP-UP VIEW — ON EVERY SCREEN SIZE.
+  // The two-page spread ("book type view") has been REMOVED completely:
+  // every numbered page (1, 2, 3 … to the end) gets its own screen and
+  // turns with the upward sheet-flip animation (rotateX around the TOP
+  // hinge). All data lives on the FRONT side only — the back of every
+  // sheet is plain blank paper with no content whatsoever.
   const PHONE_MQ = window.matchMedia("(max-width: 820px)");
-  function isPhoneBook() { return PHONE_MQ.matches; }
+  function isPhoneBook() { return true; }   // single-page mode everywhere now
   function applyPhoneModeClass() {
     document.body.classList.toggle("book-phone-mode", isPhoneBook());
   }
@@ -2314,8 +2315,8 @@
       bookPageOcc.push(items.occ || []);                // parallel to `pages` (index 0 = cover)
     });
 
-    // Ensure even number of pages so every spread has left+right
-    if (pages.length % 2 !== 0) { pages.push(""); bookPageOcc.push([]); }
+    // SINGLE-PAGE MODE: no trailing padding sheet is needed any more — every
+    // flowed page is its own screen, so odd counts are perfectly fine.
     return pages;
   }
 
@@ -3113,47 +3114,35 @@
     // and `flipping` could stay stuck true — permanently blocking plain page
     // turns on the phone. Reset the flight state whenever we re-render.
     flipping = false;
-    if (leafEl) leafEl.classList.remove("flipping-forward", "flipping-back");
+    if (leafEl) leafEl.classList.remove("flipping-forward", "flipping-back", "single-flip-forward", "single-flip-back");
     updateBookAddBtn();   // ➕ Add tab appears only while a book filter is active
-    // On phones every numbered page (1, 2, 3 …) gets its OWN screen, so the
-    // phone "spread" counter must never be clamped to the desktop sheet count
-    // — clamp per mode instead.
-    const totalSpreads = Math.max(1, Math.ceil(bookPages.length / 2));
-    if (!isPhoneBook() && spread >= totalSpreads) { spread = totalSpreads - 1; }
-    const li = spread * 2;      // left page index
-    const ri = spread * 2 + 1;  // right page index
+    // SINGLE-PAGE MODE (every screen size): one page per screen, so the
+    // counter simply walks pages 0 .. N-1 of the flowed sheets.
+    const totalSheets = Math.max(1, bookPages.length);
+    if (spread >= totalSheets) { spread = totalSheets - 1; }
+    const cur = spread;                     // the ONE page on screen
     const lc = $("#leftContent"), rc = $("#rightContent");
-    // ---- PHONE MODE: ONE PAGE AT A TIME, CONTINUOUS NUMBERING ----
-    // Every numbered page (1, 2, 3, 4, 5 … till the end) gets its OWN screen
-    // as a single full-width sheet rendered in the LEFT slot — which carries
-    // the correct per-side header/footer chrome for odd AND even pages. No
-    // page is ever skipped or mirrored away, so numbering runs contiguously
-    // and every page shows its entry preview properly.
-    const phone = isPhoneBook();
-    const cur = phone ? spread : li;               // phone: one page per screen
+    // ---- ONE PAGE AT A TIME, CONTINUOUS NUMBERING ----
+    // Every numbered page (1, 2, 3, 4, 5 … till the end) gets its OWN sheet
+    // rendered in the LEFT slot — which carries the correct header/footer
+    // chrome. The right half of the old two-page spread is never rendered:
+    // the "book type" spread view has been removed on all screen sizes.
     lc.innerHTML = pageHTML(cur);
-    rc.innerHTML = phone ? "" : pageHTML(ri);
-    // apply random stickers on all book pages (staggered so the two sides
-    // decorate different free spots — never look like mirrored clones)
+    rc.innerHTML = "";                      // no back/spread page — always empty
+    // apply random stickers on every book page
     addStickersToPage(lc, "L" + cur);
-    if (!phone) addStickersToPage(rc, "R" + ri);
-    // Real page numbers on EVERY page (cover = page 1). Only the trailing
-    // padding sheet (added to complete the last desktop spread) stays blank —
-    // it has no content, so it must not wear a number.
-    const lastIdx = bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1);
-    $("#leftNum").textContent  = cur <= lastIdx ? String(cur + 1) : "";
-    $("#rightNum").textContent = !phone && ri <= lastIdx ? String(ri + 1) : "";
-    // Page count differs between modes: the phone walks EVERY numbered page
-    // (1..N), the desktop turns sheets (each sheet = 2 pages).
-    const totalPages = Math.max(1, lastIdx + 1);
-    const pageInfoTxt = phone
-      ? "Page " + (cur + 1) + " / " + totalPages
-      : "Spread " + (spread + 1) + " / " + totalSpreads;
+    // Real page numbers on EVERY page (cover = page 1). No padding sheets
+    // exist any more, so every sheet wears its number.
+    $("#leftNum").textContent  = cur < bookPages.length ? String(cur + 1) : "";
+    $("#rightNum").textContent = "";        // right half is gone — never numbered
+    // Page count: the reader walks EVERY numbered page (1..N).
+    const totalPages = totalSheets;
+    const pageInfoTxt = "Page " + (cur + 1) + " / " + totalPages;
     $("#spreadInfo").textContent = pageInfoTxt;
     const sip = $("#spreadInfoPhone"); if (sip) sip.textContent = pageInfoTxt;
-    const maxPos = phone ? totalPages - 1 : totalSpreads - 1;
-    $("#prevPageBtn").disabled = phone ? cur <= 0 : spread <= 0;
-    $("#nextPageBtn").disabled = phone ? cur >= maxPos : spread >= maxPos;
+    const maxPos = totalPages - 1;
+    $("#prevPageBtn").disabled = cur <= 0;
+    $("#nextPageBtn").disabled = cur >= maxPos;
     const tp = $("#tabPrev"), tn = $("#tabNext");   // phone tab bar (Prev/Next)
     if (tp) tp.disabled = cur <= 0;
     if (tn) tn.disabled = cur >= maxPos;
@@ -3201,7 +3190,7 @@
       ic.textContent = "✅";
       setTimeout(() => { ic.textContent = oldT; }, 1400);
     });
-    showToast("📌 Page " + (spread * 2 + 1) + " saved — next time the book opens right here ✨");
+    showToast("📌 Page " + (spread + 1) + " saved — next time the book opens right here ✨");
   }
   function updateSaveState() {
     const b = $("#saveBookBtn");
@@ -3965,58 +3954,46 @@
   function flipPage(dir) {
     if (flipping) return;
 
-    // ---- PHONE MODE: NOT A BOOK — PLAIN SINGLE-PAGE SWAP ----
-    // On phones every numbered page (1, 2, 3 … to the end) is its own
-    // full-screen sheet and turning a page simply REPLACES it with the next
-    // / previous one. No leaf, no ghost clone, no 3D upward rotation — the
-    // book/flip mechanics are desktop-only. Swipe, tap and the Prev/Next
-    // tabs all route through here; everything else (pagination, numbering,
-    // save/print) behaves exactly as before.
-    if (isPhoneBook()) {
-      // The phone counter walks EVERY numbered page (1..N), NOT the desktop
-      // sheet count — bookPages may carry trailing blank padding sheets that
-      // must never become extra "pages" on the phone. Same lastIdx maths as
-      // renderSpread(), so the guard and the pager can never disagree.
-      const lastIdx = bookPages.length - (bookPages.length % 2 === 0 ? 2 : 1);
-      const totalPages = Math.max(1, lastIdx + 1);   // pages 1..N on phones
-      if (dir === "next" && spread >= totalPages - 1) return;
-      if (dir === "prev" && spread <= 0) return;
-      spread += dir === "next" ? 1 : -1;
-      renderSpread();
-      return;
-    }
-
-    const totalSpreads = Math.ceil(bookPages.length / 2);
-    if (dir === "next" && spread >= totalSpreads - 1) return;
+    // ---- SINGLE-PAGE MODE (every screen size): ONE PAGE PER SCREEN ----
+    // Every numbered page (1, 2, 3 … to the end) is its own full-width sheet.
+    // Turning a page plays the PORTRAIT UPWARD FLIP: the current sheet lifts
+    // from its bottom edge and rotates UPWARD over the top hinge (rotateX),
+    // revealing the next page underneath. The back of the sheet is plain
+    // blank paper — ALL data lives on the FRONT side only; there is no
+    // two-page spread any more and no content ever appears on a back page.
+    // NOTE: renderSpread() resets `flipping` and strips leaf classes, so the
+    // flight state must be re-armed AFTER every mid-animation re-render.
+    const totalPages = Math.max(1, bookPages.length);   // pages 1..N everywhere
+    if (dir === "next" && spread >= totalPages - 1) return;
     if (dir === "prev" && spread <= 0) return;
 
     flipping = true;
-    /* PORTRAIT UPWARD FLIP (desktop spread): the sheet being turned lifts
-       from its BOTTOM edge and rotates UPWARD over the top binding — it is
-       NEVER a horizontal side-flip. Only the FRONT face carries writing; the
-       back face stays blank paper (see fillLeaf + .leaf-back rules). */
-    if (dir === "next") {
-      // Right-hand sheet swings UP over the top edge → new left page appears
-      const oldRight = spread * 2 + 1;
-      const newLeft = spread * 2 + 2;
-      fillLeaf(pageHTML(oldRight), pageHTML(newLeft), String(oldRight + 1), String(newLeft + 1));
-      leafEl.classList.remove("flipping-back");
-      leafEl.classList.add("flipping-forward");   // flipUp keyframes (rotateX, top hinge)
-    } else {
-      // Previous sheet comes back DOWN onto the right-hand side
-      const oldLeft = spread * 2;
-      const newRight = spread * 2 - 1;
-      fillLeaf(pageHTML(oldLeft), pageHTML(newRight), String(oldLeft + 1), String(newRight + 1));
-      leafEl.classList.remove("flipping-forward");
-      leafEl.classList.add("flipping-back");      // flipDown keyframes (rotateX, top hinge)
-    }
+    const cur = spread;                    // page currently on screen
+    const nxt = dir === "next" ? spread + 1 : spread - 1;
+    // Put the INCOMING page on the static sheet underneath first, so it is
+    // revealed as the leaf flies upward (or lowered onto when going back).
+    spread = nxt;
+    renderSpread();                        // static sheet now shows page nxt
+    spread = cur;                          // restore until the flight lands
+    // Re-arm the flight state (renderSpread reset it) BEFORE painting the
+    // leaf, so the pending timeout can never be cancelled mid-flight.
+    flipping = true;
+    // The leaf carries the page that is being turned away (front face only).
+    fillLeaf(pageHTML(cur), "", String(cur + 1), "");
+    // force a reflow so the animation always restarts cleanly
+    void leafEl.offsetWidth;
+    leafEl.classList.remove("single-flip-back", "single-flip-forward",
+                            "flipping-forward", "flipping-back");
+    leafEl.classList.add(dir === "next" ? "single-flip-forward"   // flipUpSingle (rotateX, top hinge)
+                                        : "single-flip-back");     // flipDownSingle (rotateX, top hinge)
 
     setTimeout(() => {
-      if (dir === "next") spread += 1; else spread -= 1;
-      renderSpread();
-      leafEl.classList.remove("flipping-forward", "flipping-back");
+      spread = nxt;
+      renderSpread();                      // lands on the new page & clears the leaf
+      flipping = true;                     // renderSpread reset it again — keep lock
+      leafEl.classList.remove("single-flip-forward", "single-flip-back");
       flipping = false;
-    }, 800);
+    }, 560);
   }
 
   // ---- One-time chrome injection for the STATIC on-screen book ----
@@ -4115,15 +4092,17 @@
   if (saveBtn) saveBtn.addEventListener("click", saveBookPosition);
   const printBtn = $("#printBookletBtn");
   if (printBtn) printBtn.addEventListener("click", printBooklet);
-  $("#pageRight").addEventListener("click", () => { if (!isPhoneBook()) flipPage("next"); });
-  $("#pageLeft").addEventListener("click", () => { if (!isPhoneBook()) flipPage("prev"); });
-  // Phone: a plain tap on the sheet turns to the NEXT page (notes-style
-  // reader — every screen is one page). Clicks only fire when the pointer
-  // stays put, and any click that follows a swipe within 700 ms is ignored,
-  // so a swipe can never turn two pages.
+  // Single-page mode: clicking/tapping the visible sheet turns to the NEXT
+  // page (with the upward flip). The old spread halves never route anywhere.
+  $("#pageRight").addEventListener("click", () => {});
+  $("#pageLeft").addEventListener("click", () => { flipPage("next"); });
+  // Tap anywhere on the sheet turns to the NEXT page (single-page flip-up
+  // reader — every screen is one page, all data on the front side only).
+  // Clicks only fire when the pointer stays put, and any click that follows
+  // a swipe within 700 ms is ignored, so a swipe can never turn two pages.
   const phoneTap = document.querySelector("#bookModal .book-stage");
   if (phoneTap) phoneTap.addEventListener("click", (e) => {
-    if (!isPhoneBook() || flipping) return;
+    if (flipping) return;
     if (Date.now() - lastSwipeAt < 700) return;
     if (e.target.closest("button, a, input, select, textarea, #bookFilterBar")) return;
     flipPage("next");
