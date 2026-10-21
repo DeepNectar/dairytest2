@@ -1658,3 +1658,99 @@ html.print-mode .page-flow { min-height: 100%; }
   flex: 0 0 55%; max-width: 55%; margin-left: 6px; padding: 10px 10px;
   max-height: 96%; overflow-y: auto;
 }
+
+/* ============================================================================
+   PROPER APPLICATION — install banner, iOS guide & mobile polish.
+   These rules make the site behave and look like a real app on iOS & Android:
+   an install nudge, a step-by-step "Add to Home Screen" guide, notch-safe
+   headers/footers and keyboard-friendly modals.
+   ==========================================================================*/
+
+/* ---- install-as-app banner (bottom dock, above the home indicator) ---- */
+.install-banner {
+  position: fixed; left: 10px; right: 10px; z-index: 400;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex; align-items: center; gap: 12px;
+  max-width: 560px; margin: 0 auto; padding: 12px 14px;
+  border-radius: 16px; border: 1px solid var(--border, #e4d8c8);
+  background: var(--card, #fffdf7);
+  box-shadow: 0 14px 40px rgba(60, 47, 30, .22);
+  animation: ibIn .35s ease;
+}
+@keyframes ibIn { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+[data-theme="dark"] .install-banner { background: #2b2119; border-color: rgba(255,255,255,.14); }
+.install-banner .ib-icon { font-size: 1.7rem; line-height: 1; }
+.install-banner .ib-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.install-banner .ib-text strong { font-size: .92rem; }
+.install-banner .ib-text span { font-size: .78rem; opacity: .75; line-height: 1.35; }
+.install-banner .btn { flex: 0 0 auto; }
+.install-banner .ib-close {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 1.15rem; line-height: 1; color: inherit; opacity: .55;
+  -webkit-tap-highlight-color: transparent;
+}
+.install-banner .ib-close:active { opacity: 1; background: rgba(0,0,0,.06); }
+@media (max-width: 480px) {
+  .install-banner { padding: 10px 10px; gap: 8px; }
+  .install-banner .ib-text span { display: none; }
+}
+
+/* ---- iOS "Add to Home Screen" guide modal ---- */
+.modal.ios-guide { width: min(430px, 100%); }
+.ios-steps { list-style: none; counter-reset: iosstep; margin: 0 0 14px; padding: 0; }
+.ios-steps li {
+  counter-increment: iosstep; position: relative;
+  padding: 10px 12px 10px 52px; margin-bottom: 10px;
+  border-radius: 12px; border: 1px solid var(--border, #e4d8c8);
+  background: var(--card-bg, rgba(255,255,255,.6));
+  font-size: .92rem; line-height: 1.45;
+}
+.ios-steps li::before {
+  content: counter(iosstep); position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%); width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, #b3456b, #e07a3f); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .85rem;
+}
+[data-theme="dark"] .ios-steps li { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.14); }
+.ios-step-ic {
+  display: inline-flex; width: 22px; height: 22px; margin-right: 4px;
+  vertical-align: -5px; align-items: center; justify-content: center;
+  border-radius: 6px; background: rgba(179,69,107,.12); color: #b3456b; font-weight: 700;
+}
+.ios-hint { display: block; font-size: .78rem; opacity: .7; margin-top: 2px; }
+.ios-note { font-size: .85rem; opacity: .85; margin: 0 0 14px; line-height: 1.5; }
+
+/* ---- app-frame polish (notches, keyboards, momentum scrolling) ---- */
+/* Header & footer clear the iPhone notch / dynamic island and the Android
+   gesture bar when running in the installed standalone frame. */
+.navbar { padding-top: calc(env(safe-area-inset-top, 0px) + 0px); }
+.footer { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem); }
+html.app-standalone .navbar { padding-top: env(safe-area-inset-top, 0px); }
+
+/* Modals scroll internally on short phone screens (landscape phones with the
+   software keyboard open) so nothing gets cut off — everything stays visible. */
+.modal { max-height: calc(100dvh - 2rem); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* Larger comfortable touch targets across the app on coarse pointers. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .icon-btn, .hamburger { min-width: 42px; min-height: 42px; }
+  .modal-close { width: 36px; height: 36px; font-size: 1.15rem; }
+  /* native inputs smaller than 16px trigger iOS auto-zoom — keep them at 16px+ */
+  input, select, textarea { font-size: max(16px, 0.95rem); }
+  /* kill the grey tap flash on WebKit, use the app-like active states instead */
+  a, button, label, .sender-pill, .h-chip, .bf-chip { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Smooth momentum scrolling for the page and inner scrollers on iOS. */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.entries-list, .page-content, .book-add-pane { -webkit-overflow-scrolling: touch; }
+
+/* No accidental horizontal panning on phones: the off-canvas slide-in menu
+   (translateX(110%)) must never grow the page's scrollable width — with
+   `overflow-x: clip` (unlike `hidden`) it also doesn't turn the header into a
+   scroll container, so the drop-down still paints fully outside it when open. */
+.navbar { overflow-x: clip; }
+body { overflow-x: clip; }

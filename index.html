@@ -4,9 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="Dairy Writing — a daily writing journal. Write, save and reflect on your entries right in your browser." />
-  <!-- NOTE: PWA "install as app" wiring (manifest, service worker, install
-       buttons) has been REMOVED for now — mobile/PWA support comes later.
-       The page runs as a plain website on every device. -->
+  <!-- ===== Proper application wiring (Android + iOS) =====
+       Installable PWA: manifest + service worker + platform meta tags.
+       On Android it installs from the browser menu or the in-app button;
+       on iOS use Share → "Add to Home Screen" (the app shows step-by-step
+       instructions). Runs full-screen like a native app on both. -->
+  <meta name="theme-color" content="#f6efe4" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#241a12" media="(prefers-color-scheme: dark)" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no" />
+  <!-- iOS Safari: standalone app frame, status-bar style, no zoom-on-rotate -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Dairy Writing" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <title>Dairy Writing ✍️ | Daily Journal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -384,9 +397,38 @@ busy afternoons, her dreams and my waiting — every line pulled us closer.
     </div>
   </div>
 
+  <!-- ===== Install-as-app banner (Android Chrome prompt / iOS guide) ===== -->
+  <div class="install-banner hidden" id="installBanner" role="dialog" aria-label="Install app">
+    <span class="ib-icon" aria-hidden="true">🥛</span>
+    <div class="ib-text">
+      <strong id="ibTitle">Install Dairy Writing</strong>
+      <span id="ibSub">Add it to your home screen for the full app experience.</span>
+    </div>
+    <button class="btn btn-primary btn-sm" id="ibAction" type="button">Install</button>
+    <button class="ib-close" id="ibDismiss" type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- ===== iOS "Add to Home Screen" step-by-step guide ===== -->
+  <div class="modal-overlay hidden" id="iosGuideModal">
+    <div class="modal ios-guide" role="dialog" aria-modal="true" aria-labelledby="iosGuideTitle">
+      <button class="modal-close" id="iosGuideClose" aria-label="Close">✕</button>
+      <h3 id="iosGuideTitle">📲 Add to Home Screen</h3>
+      <p class="modal-sub">On iPhone/iPad, install Dairy Writing as an app in two taps:</p>
+      <ol class="ios-steps">
+        <li><span class="ios-step-ic">⬆︎</span> Tap the <strong>Share</strong> button
+          <span class="ios-hint">(the square with the ↑ arrow, in the Safari toolbar at the bottom)</span></li>
+        <li><span class="ios-step-ic">＋</span> Choose <strong>“Add to Home Screen”</strong>
+          <span class="ios-hint">then tap <strong>Add</strong> — the app icon appears on your home screen</span></li>
+      </ol>
+      <p class="ios-note">After that, open it from its icon — it launches full-screen like a native app, with all your diary synced in the cloud. 💕</p>
+      <button class="btn btn-primary btn-block" id="iosGuideOk" type="button">Got it ✓</button>
+    </div>
+  </div>
+
   <!-- Toast notification -->
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="app-install.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
